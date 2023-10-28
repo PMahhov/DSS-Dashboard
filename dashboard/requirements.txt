@@ -6,3 +6,7 @@ sqlalchemy
 pulp 
 country_converter
 python-gnupg
+plotly
+cbsodata
+folium
+geopandas

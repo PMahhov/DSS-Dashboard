@@ -2,62 +2,61 @@ import pandas as pd
 import plotly.express as px
 from flask import Flask, render_template_string, render_template
 from sqlalchemy import create_engine, text, inspect, Table
+import geopandas as gpd
+import folium
+import cbsodata
 
-# Load the csv file into the db
-def _load_data_to_db():
-    engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
-
-    with engine.connect() as conn:
-        result = conn.execute(text("DROP TABLE IF EXISTS population CASCADE;"))
-
-    population_df = pd.read_csv("../data/world_population.csv", delimiter=";")
-    population_df.to_sql("population", engine, if_exists="replace", index=True)
-
-# Fetch the hardcoded population table from the database
-def _fetch_data_from_db():
-    engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
-    population_table = pd.read_sql_table('population', engine, index_col='index')
-
-    return population_table
-
-# Generate the interactive plot for in your HTML file
-def generate_population_graph():
-    # Get the table from the database, returns a dataframe of the table
-    population_df = _fetch_data_from_db()
-    population_df['YearIncrease'] = population_df['YearIncrease'].str.replace(',','.').astype(float)
-
-    world_data = population_df[population_df['Region'] == 'WORLD']
-    netherlands_data = population_df[population_df['Region'] == 'Netherlands']
-
-    # Combine the data for World and Netherlands into a single DataFrame
-    combined_data = pd.concat([world_data, netherlands_data])
-
-    # Create a bar chart using Plotly for the combined data
-    fig = px.bar(combined_data, x='Year', y='YearIncrease', color='Region',
-                title='Yearly Increase in World and Netherlands Population',
-                barmode='group')  # Set the barmode to 'group' for side-by-side bars
-
-    # Convert the Plotly figure to HTML
-    plot_html = fig.to_html(full_html=False)
-
-    return plot_html
-
-
-# Load the data into the database
-# You will do this asynchronously as a cronjob in the background of your application
-# Or you fetch the data from different sources when the page is visited or how you like to fetch your data
-# Notice that the method _load_data_to_db() now just reads a preloaded .csv file
-# You will have to fetch external files, or call API's to fill your database
-_load_data_to_db()
-
-# Initialize the Flask application
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    # As soon as the page is loaded, the data is retrieved from the db and the graph is created
-    # And is put in the HTML div
-    return render_template('index.html', plot_html=generate_population_graph())
+    # Your original code starts here
 
-if __name__ == '__main__':
+    # Find out which columns are available
+    metadata = pd.DataFrame(cbsodata.get_meta('83765NED', 'DataProperties'))
+
+    # Download birth rates and delete spaces from regional identifiers
+    data = pd.DataFrame(cbsodata.get_data('83765NED', select = ['WijkenEnBuurten', 'Codering_3', 'GeboorteRelatief_25']))
+    data['Codering_3'] = data['Codering_3'].str.strip()
+
+    # Retrieve data with municipal boundaries from PDOK
+    geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2023.geojson'
+    municipal_boundaries = gpd.read_file(geodata_url)
+
+    # Link data from Statistics Netherlands to geodata
+    municipal_boundaries = pd.merge(municipal_boundaries, data,
+                                   left_on = "statcode",
+                                   right_on = "Codering_3")
+
+    # CRS: EPSG 3857 (web mercator projection wgs84)
+    municipal_boundaries.crs
+    municipal_boundaries = municipal_boundaries.to_crs(epsg = 4326)
+
+    # First column: Geoid, geometry column and data columns
+    gdf_choro = municipal_boundaries.copy()
+    gdf_choro['geoid'] = gdf_choro.index.astype(str)
+    gdf_choro = gdf_choro[['geoid', 'geometry', 'statnaam', 'GeboorteRelatief_25']]
+
+    # Center
+    nld_lat = 52.2130
+    nld_lon = 5.2794
+    nld_coordinates = (nld_lat, nld_lon)
+
+    # Folium base map
+    map_nld = folium.Map(location=nld_coordinates, tiles='cartodbpositron', zoom_start=6, control_scale=True)
+
+    # Folium choropleth
+    folium.Choropleth(geo_data=gdf_choro,
+                      data=gdf_choro,
+                      columns=['geoid', 'GeboorteRelatief_25'],
+                      key_on='feature.id',
+                      fill_color='Blues',
+                      legend_name='Geboorterelatief').add_to(map_nld)
+
+    # Your original code ends here
+
+    map_nld.save("templates/map.html")
+    return render_template("map.html")
+
+if __name__ == "__main__":
     app.run(debug=True)
