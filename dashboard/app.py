@@ -1,72 +1,60 @@
-#Make choropleth map with folium and with plotly
-
-#CBS Open Data
-#https://www.cbs.nl/nl-nl/onze-diensten/open-data/statline-als-open-data/cartografie
-
-#Plotly
-#https://plotly.com/python/mapbox-county-choropleth/
-
-
-#Libraries
+# Libraries
+import dash
+from dash import dcc
+from dash import html
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output
 import pandas as pd
 import geopandas as gpd
-import folium
 import cbsodata
 import plotly.express as px
 
-# Find out which columns are available
-metadata = pd.DataFrame(cbsodata.get_meta('83765NED', 'DataProperties'))
-
-# Download birth rates and delete spaces from regional identifiers
+#metadata = pd.DataFrame(cbsodata.get_meta('85039NED', 'DataProperties'))
 data = pd.DataFrame(cbsodata.get_data('85039NED', select = ['WijkenEnBuurten', 'Codering_3', 'GeboorteRelatief_25']))
 data['Codering_3'] = data['Codering_3'].str.strip()
-
-# Retrieve data with municipal boundaries from PDOK
 geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2023.geojson'
 municipal_boundaries = gpd.read_file(geodata_url)
-
-# Link data from Statistics Netherlands to geodata
 municipal_boundaries = pd.merge(municipal_boundaries, data,
-                               left_on = "statcode", 
-                               right_on = "Codering_3")
-
-#CRS: EPSG 4326 (web mercator projection wgs84)
-municipal_boundaries.crs
-municipal_boundaries = municipal_boundaries.to_crs(epsg = 4326)
-
-
-#First column: Geoid, geometry column and  data columns
+                                left_on="statcode",
+                                right_on="Codering_3")
+municipal_boundaries = municipal_boundaries.to_crs(epsg=4326)
 gdf_choro = municipal_boundaries.copy()
 gdf_choro['geoid'] = gdf_choro.index.astype(str)
 gdf_choro = gdf_choro[['geoid', 'geometry', 'statnaam', 'GeboorteRelatief_25']]
-gdf_choro.head(3)
 
-#Center
-nld_lat = 52.2136
-nld_lon = 5.291266
-nld_coordinates = (nld_lat, nld_lon)
-
-#Folium base map
-map_nld = folium.Map(location=nld_coordinates, tiles='cartodbpositron', zoom_start=6, control_scale=True)
-
-#Folium choropleth
-map_nld = folium.Map(location=nld_coordinates, tiles='cartodbpositron', zoom_start=6, control_scale=True)
-folium.Choropleth(geo_data=gdf_choro,
-                  data=gdf_choro,
-                  columns=['geoid', 'GeboorteRelatief_25'],
-                  key_on='feature.id',
-                  fill_color='Blues',                  
-                  legend_name='Geboorterelatief'
-                 ).add_to(map_nld)
-map_nld
-
-#Plotly choropleth
 fig = px.choropleth_mapbox(gdf_choro,
-                           geojson=gdf_choro.__geo_interface__,#['geometry']
+                           geojson=gdf_choro.__geo_interface__,
                            locations=gdf_choro.geoid,
                            color='GeboorteRelatief_25',
                            featureidkey='properties.geoid',
                            center={'lat': 52.213, 'lon':5.2794},
                            mapbox_style='carto-positron',
                            zoom=6)
-fig.show()
+
+# Dash app
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
+app.layout = html.Div(children=[
+    html.H1(children='CrimeStat'),
+    html.Div(children='''
+        CrimeStat: comparing your municipality with everything.
+    '''),
+    dcc.Graph(id='plotly_map', figure=fig),
+    html.Div(id='click_output')
+])
+
+@app.callback(
+    Output('click_output', 'children'),
+    Input('plotly_map', 'clickData'))
+def display_click_data(clickData):
+    if clickData is None:
+        return 'Click on a region to see details'
+    else:
+        # Extract the index of the clicked region
+        point_idx = clickData['points'][0]['pointIndex']
+        # Use the index to find the corresponding name and birth rate
+        region_name = gdf_choro.iloc[point_idx]['statnaam']
+        birth_rate = gdf_choro.iloc[point_idx]['GeboorteRelatief_25']
+        return f'You clicked on {region_name}. Birth rate: {birth_rate}'
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
