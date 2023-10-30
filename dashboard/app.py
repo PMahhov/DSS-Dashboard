@@ -12,7 +12,7 @@ import plotly.express as px
 #metadata = pd.DataFrame(cbsodata.get_meta('85039NED', 'DataProperties'))
 data = pd.DataFrame(cbsodata.get_data('85039NED', select = ['WijkenEnBuurten', 'Codering_3', 'GeboorteRelatief_25']))
 data['Codering_3'] = data['Codering_3'].str.strip()
-geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2023.geojson'
+geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2021.geojson'
 municipal_boundaries = gpd.read_file(geodata_url)
 municipal_boundaries = pd.merge(municipal_boundaries, data,
                                 left_on="statcode",
@@ -26,20 +26,38 @@ fig = px.choropleth_mapbox(gdf_choro,
                            geojson=gdf_choro.__geo_interface__,
                            locations=gdf_choro.geoid,
                            color='GeboorteRelatief_25',
+                           hover_name= 'statnaam'
                            featureidkey='properties.geoid',
                            center={'lat': 52.213, 'lon':5.2794},
                            mapbox_style='carto-positron',
-                           zoom=6)
+                           zoom=6, height = 800)
+
+navbar = dbc.NavbarSimple(
+    children=[
+        dbc.NavItem(dbc.NavLink("Page 1", href="#")),
+        dbc.DropdownMenu(
+            children=[
+                dbc.DropdownMenuItem("More pages", header=True),
+                dbc.DropdownMenuItem("Page 2", href="#"),
+                dbc.DropdownMenuItem("Page 3", href="#"),
+            ],
+            nav=True,
+            in_navbar=True,
+            label="More",
+        ),
+    ],
+    brand="Crimestat",
+    brand_href="#",
+    color="primary",
+    dark=True,
+)
 
 # Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUMEN])
 app.layout = html.Div(children=[
-    html.H1(children='CrimeStat'),
-    html.Div(children='''
-        CrimeStat: comparing your municipality with everything.
-    '''),
+    navbar,
     dcc.Graph(id='plotly_map', figure=fig),
-    html.Div(id='click_output')
+    dbc.Row(dbc.Col(id='click_output')),
 ])
 
 @app.callback(
