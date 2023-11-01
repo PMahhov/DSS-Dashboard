@@ -2,12 +2,11 @@ Flask
 pandas
 plotly
 psycopg2-binary 
-sqlalchemy 
-pulp 
+sqlalchemy  
 country_converter
 python-gnupg
 plotly
 cbsodata
-folium
-geopandas
 dash
+dash_bootstrap_components
+geopandas
