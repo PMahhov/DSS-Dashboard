@@ -10,3 +10,4 @@ cbsodata
 dash
 dash_bootstrap_components
 geopandas
+cbsodata
