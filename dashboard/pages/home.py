@@ -21,7 +21,7 @@ engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboar
 data = pd.read_sql_query('SELECT municipality_id, "XP" AS XP, crime_score FROM CRIME_SCORE WHERE year = 2022', engine)
 print(data)
 data['municipality_id'] = data['municipality_id'].str.strip() # Remove any leading characters
-geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2021.geojson' # Download geojson file with all Dutch municipalities
+geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2022.geojson' # Download geojson file with all Dutch municipalities
 municipal_boundaries = gpd.read_file(geodata_url)
 municipal_boundaries = pd.merge(municipal_boundaries, data,
                                 left_on="statcode",
