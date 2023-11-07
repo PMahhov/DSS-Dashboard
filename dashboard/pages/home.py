@@ -8,29 +8,35 @@ import pandas as pd
 import geopandas as gpd
 import cbsodata
 import plotly.express as px
+from sqlalchemy import create_engine, text
+
 
 # Let Dash know this is the actual homepage
 dash.register_page(__name__, path='/')
+engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
+
 
 # Download the CBS 'Kerncijfers wijken en buurten 2021' and select 3 columns
-data = pd.DataFrame(cbsodata.get_data('85039NED', select = ['WijkenEnBuurten', 'Codering_3', 'GeboorteRelatief_25']))
-data['Codering_3'] = data['Codering_3'].str.strip() # Remove any leading characters
+#SELECT municipality_id, "XP" AS XP, crime_score FROM CRIME_SCORE WHERE year = 2022
+data = pd.read_sql_query('SELECT municipality_id, "XP" AS XP, crime_score FROM CRIME_SCORE WHERE year = 2022', engine)
+print(data)
+data['municipality_id'] = data['municipality_id'].str.strip() # Remove any leading characters
 geodata_url = 'https://cartomap.github.io/nl/wgs84/gemeente_2021.geojson' # Download geojson file with all Dutch municipalities
 municipal_boundaries = gpd.read_file(geodata_url)
 municipal_boundaries = pd.merge(municipal_boundaries, data,
                                 left_on="statcode",
-                                right_on="Codering_3")
+                                right_on="municipality_id")
 municipal_boundaries = municipal_boundaries.to_crs(epsg=4326)
 gdf_choro = municipal_boundaries.copy()
 gdf_choro['geoid'] = gdf_choro.index.astype(str)
-gdf_choro = gdf_choro[['geoid', 'geometry', 'statnaam', 'GeboorteRelatief_25', 'statcode']]
+gdf_choro = gdf_choro[['geoid', 'geometry', 'statnaam', 'xp', 'statcode', 'crime_score']]
 
 fig = px.choropleth_mapbox(gdf_choro,
                            geojson=gdf_choro.__geo_interface__,
                            locations=gdf_choro.geoid,
-                           color='GeboorteRelatief_25',
+                           color='xp',
                            hover_name= 'statnaam',
-                           hover_data = 'statcode',
+                           hover_data = ['statcode', 'crime_score'],
                            featureidkey='properties.geoid',
                            center={'lat': 52.213, 'lon':5.2794},
                            mapbox_style='carto-positron',
