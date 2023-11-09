@@ -78,7 +78,7 @@ layout = html.Div([
 def display_map(year):
     data = pd.read_sql_query(f'SELECT municipality_id, ROUND("XP"::numeric*10,2) AS XP, crime_score, ROUND(weighted_personal::numeric*10,2) AS personal, ROUND(weighted_property::numeric*10,2) AS property, ROUND(weighted_societal::numeric*100,2) AS societal FROM CRIME_SCORE WHERE year = {year}', engine)
     data['municipality_id'] = data['municipality_id'].str.strip() # Remove any leading characters
-    geodata_url = f'https://cartomap.github.io/nl/wgs84/gemeente_{year}.geojson' # Download geojson file with all Dutch municipalities
+    geodata_url = f'https://cartomap.github.io/nl/wgs84/gemeente_2022.geojson' # Download geojson file with all Dutch municipalities
     municipal_boundaries = gpd.read_file(geodata_url)
     municipal_boundaries = pd.merge(municipal_boundaries, data,
                                     left_on="statcode",

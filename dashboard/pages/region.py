@@ -1,7 +1,7 @@
 import dash
 from dash import html
 
-dash.register_page(__name__, path_template="/region/<stat_code>")
+dash.register_page(__name__, path_template="/municipality/<stat_code>")
 
 def layout(stat_code=None):
     return html.Div([
