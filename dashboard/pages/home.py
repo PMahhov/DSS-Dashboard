@@ -40,18 +40,45 @@ layout = html.Div([
     id="year"
     ),
     dcc.Store(id='shared-data'),
-    dbc.Row(dbc.Col(id='click_output'))
-])
+    dbc.Card([
+        dbc.CardBody(
+            [
+                html.H5("More information", id="click_output"),
+                html.P("More statiscs are available for municipalities. Watch now!"),
+                dbc.Button("View more", color="primary", disabled=True, id="redirect-button"),
+            ]
+        )
+    ]),
+    html.H2("Data information", style={'padding': '50px'}),
+    html.Div(
+        dbc.Accordion(
+            [
+                dbc.AccordionItem(
+                    "aaaaaa", title="What are the scores I see on the screen?"
+                ),
+                dbc.AccordionItem(
+                    "bbbbb", title="What are the spots on the map without a colour?"
+                ),
+                dbc.AccordionItem(
+                    "cccc", title="Huh, where is the red?"
+                ),
+                dbc.AccordionItem(
+                    "cccc", title="Data sources"
+                ),
+            ],
+            flush=True,
+        ),
+        ),
+], style={'paddingBottom': '50px'})
 
 @callback(
     Output("graph", "figure"),
     Output("shared-data", "data"),
     Input("year", "value"))
 def display_map(year):
-    data = pd.read_sql_query(f'SELECT municipality_id, "XP"*100 AS XP, crime_score, weighted_personal*100 AS personal, weighted_property*100 AS property, weighted_societal*100 AS societal FROM CRIME_SCORE WHERE year = {year}', engine)
+    data = pd.read_sql_query(f'SELECT municipality_id, ROUND("XP"::numeric*10,2) AS XP, crime_score, ROUND(weighted_personal::numeric*10,2) AS personal, ROUND(weighted_property::numeric*10,2) AS property, ROUND(weighted_societal::numeric*100,2) AS societal FROM CRIME_SCORE WHERE year = {year}', engine)
     data['municipality_id'] = data['municipality_id'].str.strip() # Remove any leading characters
     geodata_url = f'https://cartomap.github.io/nl/wgs84/gemeente_{year}.geojson' # Download geojson file with all Dutch municipalities
-    print(geodata_url)
     municipal_boundaries = gpd.read_file(geodata_url)
     municipal_boundaries = pd.merge(municipal_boundaries, data,
                                     left_on="statcode",
@@ -64,7 +91,7 @@ def display_map(year):
     fig = px.choropleth_mapbox(gdf_choro,
                             geojson=gdf_choro.__geo_interface__,
                             locations=gdf_choro.geoid,
-                            color_continuous_scale='oranges',
+                            color_continuous_scale='reds',
                             color='xp',
                             hover_name= 'statnaam',
                             hover_data = ['crime_score', 'property', 'societal', 'personal'],
@@ -73,21 +100,27 @@ def display_map(year):
                             mapbox_style='carto-positron',
                             range_color=(0,10),
                             labels={'xp':'Normalised crime score', 'crime_score':'Criminality level', 'property': 'Property crime score', 'societal': 'Societal crime score', 'personal': 'Personal crime score', 'geoid': 'Municipality number'},
-                            zoom=6, height = 800)
+                            zoom=6, height = 800,
+                            title=f"Crimes in The Netherlands for {year}")
     return fig, gdf_choro.to_json()
 
 @callback(
-    Output('click_output', 'children'),
-    Input('shared-data', 'data'),
-    Input('graph', 'clickData'))
+    [Output('click_output', 'children'),
+     Output('redirect-button', 'disabled'),
+     Output('redirect-button', 'href')],
+    [Input('shared-data', 'data'),
+     Input('graph', 'clickData')]
+)
 def display_click_data(shared_data, clickData):
     if clickData is None:
-        return 'Click on a region to see details'
+        return 'Click on a municipality to see more details', True, '#'
     else:
         gdf_choro = gpd.GeoDataFrame.from_features(json.loads(shared_data))
-        print(gdf_choro)
-        # Extract the index of the clicked region
         point_idx = clickData['points'][0]['pointIndex']
-        # Use the index to find the corresponding name and birth rate
         region_name = gdf_choro.iloc[point_idx]['statnaam']
-        return f'You clicked on {region_name}.'
+        municipality_id = gdf_choro.iloc[point_idx]['statcode']
+        
+        # Assuming you have a page for each municipality with the format '/municipality/{municipality_id}'
+        page_link = f"/municipality/{municipality_id}"
+        
+        return f'You clicked on {region_name}.', False, page_link
