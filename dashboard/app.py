@@ -29,7 +29,7 @@ navbar = dbc.NavbarSimple(
 )
 
 # Initialise the Dash app, using pages and using a custom style sheet
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUMEN], use_pages=True)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUMEN], use_pages=True, suppress_callback_exceptions=True)
 
 # Define the app layout, which includes the navbar and a Dash bootstrap component (dbc) container
 # The actual page that is displayed for the main page is the home.py file in the pages folder.

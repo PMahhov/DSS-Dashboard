@@ -15,23 +15,33 @@ engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboar
 pd.set_option('max_colwidth', None)
 
 def layout(stat_code=None):
-    return html.Div([
-        dcc.Location(id='url', refresh=False),
-        html.H1('View municipal statistics'),
-        html.Div(f"Municipality code: {stat_code}"),
-        dcc.Dropdown(
-            id='year-dropdown',
-            options=[
-                {'label': str(year), 'value': year} for year in range(2014, 2022)
-            ],
-            value=2016,
-            style={'width': '50%'}
-        ),
-        html.Div([
-            dcc.Graph(id='pie-chart'),
-            DataTable(id='data-table', style_table={'overflowX': 'auto'}),
+    municipal_name = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}'", engine)
+    if not (municipal_name.empty or pd.isna(municipal_name.iloc[0]['municipality_name'])):
+        municipal_name = municipal_name.iloc[0]['municipality_name']
+        return html.Div([
+            dcc.Location(id='url', refresh=False),
+            html.H1(f'View municipal statistics - {municipal_name}'),
+            html.Div(f"Municipality code: {stat_code}"),
+            dcc.Dropdown(
+                id='year-dropdown',
+                options=[
+                    {'label': str(year), 'value': year} for year in range(2014, 2022)
+                ],
+                value=2016,
+                style={'width': '50%'}
+            ),
+            html.Div([
+                dcc.Graph(id='pie-chart'),
+                DataTable(id='data-table', style_table={'overflowX': 'auto'}),
+            ])
         ])
-    ])
+    else:
+        return html.Div([
+            dcc.Location(id='url', refresh=False),
+            html.H1(f'View municipal statistics'),
+            html.Div(f"Municipality code: {stat_code}"),
+            dbc.Alert("The requested municipality does not exist", color="danger"),
+            ])        
 
 @callback(
     [Output('data-table', 'data'),
@@ -41,25 +51,25 @@ def layout(stat_code=None):
 )
 def update_data(selected_year, pathname):
     stat_code = pathname.split('/')[-1]
-    data = pd.read_sql_query(f"SELECT * FROM demo_data WHERE municipality_id = '{stat_code}'", engine)
-    
+    data = pd.read_sql_query(f"SELECT * FROM demo_data WHERE municipality_id = '{stat_code}'", engine)    
     # Create a table component
-    table = generate_table(data)
+    table = generate_table(data, selected_year)
 
     # Create a pie chart
     fig = generate_pie_chart(selected_year, data)
     return data.to_dict('records'), fig
 
-def generate_table(dataframe, max_rows=10):
+def generate_table(dataframe, selected_year, max_rows=10):
     columns = ['population', 'household_size', 'population_density', 'avg_income_per_resident', 'unemployment_rate']
-    
+    pie_df = dataframe[dataframe['year'] == selected_year]
+    print(pie_df)
     # Create DataTable columns
     table_columns = [{'name': col, 'id': col} for col in columns]
     
     return DataTable(
         id='data-table',
         columns=table_columns,
-        data=dataframe.to_dict('records'),
+        data=pie_df.to_dict('records'),
         style_table={'overflowX': 'auto'},
         style_cell={'textAlign': 'left'},
         page_size=max_rows
@@ -67,10 +77,7 @@ def generate_table(dataframe, max_rows=10):
     
 def generate_pie_chart(selected_year:int, dataframe):
     # Function to create a pie chart using Plotly Express
-    print('Selected year: ', selected_year)
     pie_df = dataframe[dataframe['year'] == selected_year]
-    print('Table 1:', pie_df)
-    print(pie_df.iloc[0]['low_educated_population'])
     if not (pie_df.empty or pd.isna(pie_df.iloc[0]['low_educated_population'])):
         pie_dfs = pie_df.iloc[0]
         print(pie_dfs)
