@@ -32,7 +32,13 @@ def layout(stat_code=None):
             ),
             html.Div([
                 dcc.Graph(id='pie-chart'),
-                DataTable(id='data-table', style_table={'overflowX': 'auto'}),
+                html.Div([
+                    dcc.Loading(
+                        id="loading-table",
+                        type="circle",
+                        children=[html.Div(id="data-table")],
+                    )
+                ]),
             ])
         ])
     else:
@@ -44,32 +50,33 @@ def layout(stat_code=None):
             ])        
 
 @callback(
-    [Output('data-table', 'data'),
+    [Output('data-table', 'children'),
      Output('pie-chart', 'figure')],
     [Input('year-dropdown', 'value'),
      Input('url', 'pathname')]
 )
-def update_data(selected_year, pathname):
+def update_data(current_year, pathname):
+    print('Current year', current_year)
     stat_code = pathname.split('/')[-1]
     data = pd.read_sql_query(f"SELECT * FROM demo_data WHERE municipality_id = '{stat_code}'", engine)    
     # Create a table component
-    table = generate_table(data, selected_year)
+    filtered_data = data[data['year'] == current_year]
+    print('Current filter year', current_year)
+    table = generate_table(filtered_data)
 
     # Create a pie chart
-    fig = generate_pie_chart(selected_year, data)
-    return data.to_dict('records'), fig
+    fig = generate_pie_chart(current_year, data)
+    return table, fig
 
-def generate_table(dataframe, selected_year, max_rows=10):
-    columns = ['population', 'household_size', 'population_density', 'avg_income_per_resident', 'unemployment_rate']
-    pie_df = dataframe[dataframe['year'] == selected_year]
-    print(pie_df)
+def generate_table(dataframe, max_rows=10):
+    columns = ['population', 'household_size', 'population_density', 'avg_income_per_recipient', 'unemployment_rate', 'year']
     # Create DataTable columns
     table_columns = [{'name': col, 'id': col} for col in columns]
     
     return DataTable(
         id='data-table',
         columns=table_columns,
-        data=pie_df.to_dict('records'),
+        data=dataframe.to_dict('records'),
         style_table={'overflowX': 'auto'},
         style_cell={'textAlign': 'left'},
         page_size=max_rows
