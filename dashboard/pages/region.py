@@ -68,9 +68,10 @@ def generate_table(dataframe, max_rows=10):
 def generate_pie_chart(selected_year:int, dataframe):
     # Function to create a pie chart using Plotly Express
     print('Selected year: ', selected_year)
-    pie_df = dataframe[dataframe['year'] == {selected_year}]
+    pie_df = dataframe[dataframe['year'] == selected_year]
     print('Table 1:', pie_df)
-    if not pie_df.empty:
+    print(pie_df.iloc[0]['low_educated_population'])
+    if not (pie_df.empty or pd.isna(pie_df.iloc[0]['low_educated_population'])):
         pie_dfs = pie_df.iloc[0]
         print(pie_dfs)
 
