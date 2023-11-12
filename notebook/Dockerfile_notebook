@@ -1,4 +1,4 @@
 FROM jupyter/scipy-notebook
-RUN pip install psycopg2-binary sqlalchemy pulp country_converter python-gnupg
+RUN pip install psycopg2-binary sqlalchemy pulp country_converter python-gnupg imblearn
 USER root
 RUN apt-get update && apt-get install -y gnupg
