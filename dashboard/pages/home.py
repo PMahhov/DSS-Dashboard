@@ -129,4 +129,4 @@ def display_click_data(shared_data, clickData):
         page_link = f"/municipality/{municipality_id}"
         page_link_prediction = f"/predict/{municipality_id}"
         
-        return f'You clicked on {region_name}.', False, page_link, page_link_prediction
+        return f'You clicked on {region_name}.', False, page_link, False, page_link_prediction
