@@ -12,12 +12,17 @@ from sqlalchemy import create_engine
 dash.register_page(__name__, path_template="/municipality/<stat_code>")
 engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
 
+#This is the page with the details on the municipality. 
+
 def layout(stat_code=None):
+    # Obtain the municipality name for display at the top
     municipal_name = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}' LIMIT 1", engine)
     try:
         municipal_name_defined = municipal_name.iloc[0]['municipality_name']
     except IndexError:
+        # If the municipal_name cannot be found, the ID is incorrect. We create a bogus municipal_name_defined that is empty for later on
         municipal_name_defined = pd.DataFrame({'A' : []})
+    # Create the first tab content
     tab1_content = dbc.Card(
     dbc.CardBody(
         [
@@ -60,6 +65,7 @@ def layout(stat_code=None):
     ),
     className="mt-3",
     )
+    # If the municipal name string is empty, display an error code
     if not (municipal_name.empty or pd.isna(municipal_name.iloc[0]['municipality_name'])):
         municipal_name = municipal_name.iloc[0]['municipality_name']
         return html.Div([
@@ -74,7 +80,7 @@ def layout(stat_code=None):
             dcc.Location(id='url', refresh=False),
             html.H1(f'View municipal statistics'),
             html.Div(f"Municipality code: {stat_code}"),
-            dbc.Alert("The requested municipality does not exist", color="danger"),
+            dbc.Alert("The requested municipality does not exist (anymore)", color="danger"),
             ])        
 
 @callback(
@@ -85,7 +91,8 @@ def layout(stat_code=None):
      Input('url', 'pathname')]
 )
 def update_data(current_year, pathname):
-    stat_code = pathname.split('/')[-1]
+    # Create a dataframe called data with the required columns for the table and pie chart.
+    stat_code = pathname.split('/')[-1] # Obtain the municipality ID from the URL
     data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
     table = generate_table(data)
 
@@ -97,6 +104,7 @@ def update_data(current_year, pathname):
     return table, fig, crimescatter
 
 def generate_table(dataframe, max_rows=15):
+    # Add some human readable labels and explanation
     column_labels = {
         'year': 'Year',
         'population': 'Population',
@@ -118,12 +126,12 @@ def generate_table(dataframe, max_rows=15):
     # Create DataTable columns
     columns = [{'name': column_labels[col], 'id': col} for col in column_labels]
 
-    # Round the 'avg_income_per_recipient' column to 0 decimal places
+    # Round the 'avg_income_per_recipient' column to 0 decimal places and convert the 'unemployment_rate' to a percentage rounded to 2 decimals
     dataframe['avg_income_per_recipient'] = dataframe['avg_income_per_recipient'].round(0)
     dataframe['unemployment_rate'] = (dataframe['unemployment_rate'] * 100).round(2)
     dataframe = dataframe.replace('', 'Not known yet')
 
-    rows = dataframe.to_dict('records')
+    rows = dataframe.to_dict('records') # The DataTable function requires a dictionary-based dataframe
     
     return dash_table.DataTable(
         id='data-table',
@@ -134,10 +142,10 @@ def generate_table(dataframe, max_rows=15):
         page_size=max_rows,
         sort_action='native',  
         sort_mode='single', 
-        sort_by=[{'column_id': 'year', 'direction': 'desc'}],
-        tooltip_header={col: f'Explanation: {column_hints[col]}' for col in column_hints},
+        sort_by=[{'column_id': 'year', 'direction': 'desc'}], # sort the table by year in descending order
+        tooltip_header={col: f'Explanation: {column_hints[col]}' for col in column_hints}, # when you hover over a column, this is what you see
         tooltip_data=[{
-        'crime_score': {
+        'crime_score': { # when you hover over the crime_score label, you see a small tooltip with what it means
             'value': 'Compared to the rest of The Netherlands, this is doing **{} {}** than other municipalities'.format(
                 '66%' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'high_crime' else '33%',
                 'better' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'medium_crime' else 'worse'
@@ -158,9 +166,10 @@ def generate_table(dataframe, max_rows=15):
 def generate_pie_chart(selected_year:int, dataframe):
     # Function to create a pie chart using Plotly Express
     pie_df = dataframe[dataframe['year'] == selected_year]
+    # check if there is education data for the selected year
     if not (pie_df.empty or pd.isna(pie_df.iloc[0]['low_educated_population'])):
         pie_dfs = pie_df.iloc[0]
-
+        # convert the data to percentages
         data = {
             'low_educated_population': pie_dfs['low_educated_population']*100,
             'medium_educated_population': pie_dfs['medium_educated_population']*100,
@@ -173,16 +182,16 @@ def generate_pie_chart(selected_year:int, dataframe):
 
         fig = px.pie(df, 
                 values=df.iloc[0], 
-                names = ['Low Educated', 'Medium Educated', 'High Educated'],
+                names = legend_names, # Translate the columns to human readable names
                 title=f'Distribution of education levels in {selected_year}')
     else:
         fig = px.scatter(x=[0], y=[0], text=["No data available"])
-        # Update layout for better appearance (optional)
+        # Update layout for better appearance
         fig.update_layout(
             width=400,
             height=300,
             title="Educational Distribution",
-            template="plotly_white"  # You can choose different templates
+            template="plotly_white"
         )
 
         # Hide the axis to make it cleaner
@@ -192,9 +201,9 @@ def generate_pie_chart(selected_year:int, dataframe):
     return fig
 
 def generate_crime_scatter(statcode, selected_year:int):
-    #SELECT crime_data.crime_code AS crime_code, registered_crimes, max_jailtime_yrs FROM crime_data, crime_type WHERE crime_data.crime_code = crime_type.crime_code AND year = '2022' AND municipality_id = 'GM0197'
+    # Obtain the crime scores
     data = pd.read_sql_query(f"SELECT crime_data.crime_code AS crime_code, registered_crimes, max_jailtime_yrs, category FROM crime_data, crime_type WHERE crime_data.crime_code = crime_type.crime_code AND year = '{selected_year}' AND municipality_id = '{statcode}'", engine)
-    # The complete table provided earlier
+    # List of crimes and their descriptions
     crime_table = {
         '1.1.1': 'Theft/Burglary Home',
         '1.1.2': 'Theft/Burglary Box/Garage/Shed',
@@ -271,6 +280,7 @@ def generate_crime_scatter(statcode, selected_year:int):
 
 @callback(Output('tbl_out', 'children'), [Input('data-table', 'active_cell'), Input('url', 'pathname')])
 def get_graph_over_time(active_cell, pathname):
+    # When you click on a table cell, you can see more statistics
     if active_cell:
         stat_code = pathname.split('/')[-1]
         column_name = active_cell['column_id']

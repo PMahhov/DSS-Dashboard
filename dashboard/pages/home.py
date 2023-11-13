@@ -17,8 +17,6 @@ dash.register_page(__name__, path='/')
 engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
 
 
-# Get relevant data from the database for starting year 2022. Enable a dropdown for different years
-
 # Define the app layout and display the graph. The layout also shows a row which displays the region on which is clicked.
 layout = html.Div([
     dcc.Graph(id='graph'),
@@ -71,6 +69,7 @@ layout = html.Div([
         ),
 ], style={'paddingBottom': '50px'})
 
+# The callback works on changes in the year and retrieves the required information
 @callback(
     Output("graph", "figure"),
     Output("shared-data", "data"),
@@ -83,12 +82,12 @@ def display_map(year):
     municipal_boundaries = pd.merge(municipal_boundaries, data,
                                     left_on="statcode",
                                     right_on="municipality_id")
-    municipal_boundaries = municipal_boundaries.to_crs(epsg=4326)
+    municipal_boundaries = municipal_boundaries.to_crs(epsg=4326) # import the map with the correct settings
     gdf_choro = municipal_boundaries.copy()
     gdf_choro['geoid'] = gdf_choro.index.astype(str)
     gdf_choro = gdf_choro[['geoid', 'geometry', 'statnaam', 'xp', 'statcode', 'crime_score', 'property', 'societal', 'personal']]
 
-    fig = px.choropleth_mapbox(gdf_choro,
+    fig = px.choropleth_mapbox(gdf_choro, # create a Mapbox-style choropleth based on the scale of xp. The colours are mapped in a range of 0-10
                             geojson=gdf_choro.__geo_interface__,
                             locations=gdf_choro.geoid,
                             color_continuous_scale='reds',
