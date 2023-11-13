@@ -17,98 +17,17 @@ from sklearn.ensemble import RandomForestClassifier
 
 
 engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
-clean_demo_data = pd.read_sql_query("select * from demo_data WHERE year >= 2013 AND year <= 2022", engine)    
+clean_demo_data = pd.read_sql_query("select municipality_id, population, household_size, population_density, degree_of_urbanity, \"distance_GP\", distance_supermarket, distance_daycare, distance_school, avg_income_per_recipient, year, unemployment_rate from demo_data WHERE year >= 2013 AND year <= 2022", engine)    
+crime_score_df = pd.read_sql_query("select * from crime_score WHERE year >= 2013 AND year <= 2022", engine)    
+X_full_oversampled = pd.read_sql_query("select * from x_oversampled", engine)    
+y_full_oversampled = pd.read_sql_query("select * from y_oversampled ", engine)    
+coefficients_df = pd.read_sql_query("select * from coefficients_df ", engine)    
 
 
 pop_df = clean_demo_data
-
-groups = pop_df.groupby('municipality_id')
-
-
-# Initialize DataFrame to store the coefficients
-
-coefs_columns = ['municipality_id']
-
-
-groups = pop_df.groupby('municipality_id')
-
-# print(coefficients_df)
-
-first_loop = True
-
-feature_names = list(pop_df)[1:-2]
-feature_names.append(list(pop_df)[-1])
-
-for municipality_id, group_data in groups:
-  # print(municipality_id,"calculating")
-
-  row_coefs = [municipality_id]
-
-  # print("list pop df:",list(pop_df)[1:])
-  for dem_item in feature_names:
-    # print(municipality_id, dem_item)
-
-    X = group_data['year'].values.reshape(-1,1)
-    y = group_data[dem_item].values
-
-    model = LinearRegression()
-
-    # print("X:",X)
-    # print("y:",y)
-
-    while pd.isnull(y[0]):
-      # print("before beginning nan cull:",X,y)
-      y = y[1:]
-      if len(X) > len(y):
-        X = X[1:]
-      # print("after nan cull:",X,y)
-      if len(y) == 0 or len(X)==0:
-        raise ValueError("Empty set after beginning nan cull")
-
-    while pd.isnull(y[-1]):
-      # print("before end nan cull:",X,y)
-      y = y[:-1]
-      if len(X) != len(y):
-        X = X[:-1]
-      # print("after end nan cull:",X,y)
-      if len(y) == 0 or len(X)==0:
-        raise ValueError("Empty set after end nan cull")
-
-    for i in y:
-      if pd.isnull(i):
-        raise ValueError("There are remaining nans in data")
-
-    # print("X,y before fit",X,y)
-    model.fit(X,y)
-
-    current_intercept = model.intercept_
-    current_slope = model.coef_[0]
-
-
-    # if first_loop or dem_item+"_intercept" not in coefs_columns:
-    if first_loop:
-      coefs_columns.append(dem_item + "_intercept")
-      coefs_columns.append(dem_item + "_slope")
-
-    row_coefs.append(current_intercept)
-    row_coefs.append(current_slope)
-
-
-
-  if first_loop:
-    coefficients_df = pd.DataFrame(columns= coefs_columns)
-    first_loop = False
-
-  # print(len(coefs_columns),"coefs_columns:",coefs_columns)
-  # print(len(row_coefs),"row_coefs",row_coefs)
-  coefficients_df.loc[len(coefficients_df)] = row_coefs
-
-
-print(coefficients_df.head(6))
+prediction_demo_df = pop_df
 
 # Create classifier
-smote = SMOTE(sampling_strategy='auto', random_state=427)
-X_full_oversampled, y_full_oversampled = smote.fit_resample(X, y)
 best_params_custom = {
     'n_estimators': 300,
     'min_samples_split': 10,
@@ -117,6 +36,9 @@ best_params_custom = {
     'max_depth': 10,
     'class_weight': 'balanced_subsample'
 }
+
+feature_names = list(pop_df)[1:-2]
+feature_names.append(list(pop_df)[-1])
 
 # from sklearn.metrics._plot.precision_recall_curve import average_precision_score
 final_rf_classifier = RandomForestClassifier(random_state=427, n_estimators=best_params_custom['n_estimators'],
