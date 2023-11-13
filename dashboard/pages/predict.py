@@ -91,7 +91,13 @@ def get_all_default_predictions(GM_id, year):
   for feature in feature_names:
     value = get_demographic_value(GM_id, feature, year)
     # values[feature] = value
-    values.append(value)
+    if feature == 'population':
+       round_value = round(value, 0)
+    elif feature == 'unemployment_rate':
+       round_value = round(value, 5)
+    else:
+       round_value = round(value, 2)
+    values.append(round_value)
   # print(values)
   values_df = pd.DataFrame(columns = feature_names)
   values_df.loc[0] = values
@@ -112,8 +118,16 @@ def add_crime_class_predictions(GM_id, df):
     for index, row in df.iterrows():
         year = row['year']
         features = row.drop(['year', 'crime_class']).values  # Exclude 'year' and 'crime_class' columns
-        predicted_class = predict_crime_class(GM_id, year, features)
-        df.at[index, 'crime_class'] = predicted_class
+        # For years prior =< 2022, we already have an existing crime score
+        if year > 2022:
+            predicted_class = predict_crime_class(GM_id, year, features)
+            df.at[index, 'crime_class'] = predicted_class
+            df.at[index, 'source'] = 'Prediction'
+        else:
+            data = pd.read_sql_query(f"SELECT crime_score FROM crime_score WHERE municipality_id = '{GM_id}' AND year = {year}", engine)    
+            actual_class = data.iloc[0]
+            df.at[index, 'crime_class'] = actual_class['crime_score']
+            df.at[index, 'source'] = 'CBS'
 
     return df
 
@@ -136,8 +150,7 @@ def layout(stat_code=None):
                 dcc.Loading(
                     id="loading-table-2",
                     type="circle",
-                    children=[html.Div(id="data-table-2", style={'paddingBottom': '50px'}),
-                                dbc.Alert(id='tbl_out-2', color='secondary')],
+                    children=[html.Div(id='tbl_out-2'), html.Div(id="data-table-2", style={'paddingBottom': '50px'})],
                 )
             ]),  
         ], style={'paddingTop': '50px'})
@@ -158,11 +171,11 @@ def update_data(pathname):
     data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
     
     # In region.py, we can simply obtain the data over the last few years. This is not possible in prediction, so we'll predict it
-    initial_df = get_all_default_predictions(stat_code, 2022)
+    initial_df = get_all_default_predictions(stat_code, 2013)
     all_predictions_df = pd.DataFrame(columns=initial_df.columns)
     # Initialize an empty list to store all predictions
     all_predictions = []
-    for year in range(2023, 2050):
+    for year in range(2014, 2051):
         predictions_for_year = get_all_default_predictions(stat_code, year)
         all_predictions.append(predictions_for_year)
     
@@ -170,10 +183,8 @@ def update_data(pathname):
         all_predictions_df = pd.concat(all_predictions, ignore_index=True)
 
     all_predictions_df_crimes = add_crime_class_predictions(stat_code, all_predictions_df)
-    print(all_predictions_df_crimes)
     table = generate_table(all_predictions_df_crimes)
 
-    print(all_predictions_df_crimes.head())
     return table
 
 def generate_table(dataframe, max_rows=50):
@@ -185,6 +196,7 @@ def generate_table(dataframe, max_rows=50):
         'avg_income_per_recipient': 'Average Income per Recipient',
         'unemployment_rate': 'Unemployment Rate (%)',
         'crime_class': 'Crime score',
+        'source': 'Data source'
     }    
 
     column_hints = {
@@ -226,10 +238,13 @@ def generate_table(dataframe, max_rows=50):
 
 @callback(Output('tbl_out-2', 'children'), [Input('data-table-2', 'active_cell'), Input('url', 'pathname'), Input('data-table-2', 'data')])
 def get_graph_over_time(active_cell, pathname, dataframe):
-    if active_cell:
-        column_name = active_cell['column_id']
+    if dataframe is not None:
+        if active_cell:
+            column_name = active_cell['column_id']
+        else:
+            column_name = 'population'
+        
+        fig = px.line(dataframe, x="year", y=column_name, title=f'Predicted {column_name} year over year')
+        return dcc.Graph(figure=fig, id='graph-over-time')        
     else:
-        column_name = 'population'
-
-    fig = px.line(data_frame=dataframe, x="year", y=column_name, title=f'{column_name} year over year')
-    return dcc.Graph(figure=fig, id='graph-over-time')
+        pass
