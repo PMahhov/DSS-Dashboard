@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import os
 from sqlalchemy import create_engine, text
+from imblearn.over_sampling import SMOTE
+from sklearn.linear_model import LinearRegression
 json_url = "https://cartomap.github.io/nl/wgs84/gemeente_2023.geojson"
 response = requests.get(json_url)
 json_data = response.json()
@@ -320,4 +322,122 @@ crime_type_df.to_sql("crime_type", engine, if_exists="replace", index=False)
 with engine.connect() as conn:
     conn.execute(text("DROP TABLE IF EXISTS crime_score CASCADE;"))
 crime_score_df.to_sql("crime_score", engine, if_exists="replace", index=False)
-print('All data imported')
+print('===All data tables imported===')
+
+# START PROCESSING MACHINE LEARNING DATA
+pop_df = clean_demo_data
+prediction_demo_df = pop_df
+groups = pop_df.groupby('municipality_id')
+
+
+# Initialize DataFrame to store the coefficients
+
+coefs_columns = ['municipality_id']
+
+
+groups = pop_df.groupby('municipality_id')
+
+# print(coefficients_df)
+
+first_loop = True
+
+feature_names = list(pop_df)[1:-2]
+feature_names.append(list(pop_df)[-1])
+
+for municipality_id, group_data in groups:
+  # print(municipality_id,"calculating")
+
+  row_coefs = [municipality_id]
+
+  # print("list pop df:",list(pop_df)[1:])
+  for dem_item in feature_names:
+    # print(municipality_id, dem_item)
+
+    X = group_data['year'].values.reshape(-1,1)
+    y = group_data[dem_item].values
+
+    model = LinearRegression()
+
+    # print("X:",X)
+    # print("y:",y)
+
+    while pd.isnull(y[0]):
+      # print("before beginning nan cull:",X,y)
+      y = y[1:]
+      if len(X) > len(y):
+        X = X[1:]
+      # print("after nan cull:",X,y)
+      if len(y) == 0 or len(X)==0:
+        raise ValueError("Empty set after beginning nan cull")
+
+    while pd.isnull(y[-1]):
+      # print("before end nan cull:",X,y)
+      y = y[:-1]
+      if len(X) != len(y):
+        X = X[:-1]
+      # print("after end nan cull:",X,y)
+      if len(y) == 0 or len(X)==0:
+        raise ValueError("Empty set after end nan cull")
+
+    for i in y:
+      if pd.isnull(i):
+        raise ValueError("There are remaining nans in data")
+
+    # print("X,y before fit",X,y)
+    model.fit(X,y)
+
+    current_intercept = model.intercept_
+    current_slope = model.coef_[0]
+
+
+    # if first_loop or dem_item+"_intercept" not in coefs_columns:
+    if first_loop:
+      coefs_columns.append(dem_item + "_intercept")
+      coefs_columns.append(dem_item + "_slope")
+
+    row_coefs.append(current_intercept)
+    row_coefs.append(current_slope)
+
+
+
+  if first_loop:
+    coefficients_df = pd.DataFrame(columns= coefs_columns)
+    first_loop = False
+
+  # print(len(coefs_columns),"coefs_columns:",coefs_columns)
+  # print(len(row_coefs),"row_coefs",row_coefs)
+  coefficients_df.loc[len(coefficients_df)] = row_coefs
+
+
+# prediction_crime_score_df = crime_score_df[crime_score_df['year'].isin(included_years) == True]
+prediction_crime_score_df = crime_score_df[['municipality_id','year','crime_score']]
+# print(prediction_crime_score_df)
+
+prediction_df = pd.merge(left=prediction_demo_df,right=prediction_crime_score_df, how='outer')
+
+prediction_df = prediction_df[prediction_df.avg_income_per_recipient.isnull() != True]        # TODO: could iterate this over all columns of prediction_df to remove all rows with nans
+                                                                                              # not doing it right now to make sure the rows i think are included are in fact there
+
+prediction_df.drop(['municipality_id','year', 'low_educated_population', 'medium_educated_population', 'high_educated_population'],axis=1,inplace = True)
+
+y = prediction_df['crime_score']
+X = prediction_df.drop('crime_score', axis=1)
+
+smote = SMOTE(sampling_strategy='auto', random_state=427)
+
+X_full_oversampled, y_full_oversampled = smote.fit_resample(X, y)
+
+# Dump 'X_full_oversampled' DataFrame into 'x_oversampled' table
+with engine.connect() as conn:
+    conn.execute(text("DROP TABLE IF EXISTS x_oversampled CASCADE;"))
+X_full_oversampled.to_sql("x_oversampled", engine, if_exists="replace", index=False)
+
+# Dump 'y_full_oversampled' DataFrame into 'y_oversampled' table
+with engine.connect() as conn:
+    conn.execute(text("DROP TABLE IF EXISTS y_oversampled CASCADE;"))
+y_full_oversampled.to_sql("y_oversampled", engine, if_exists="replace", index=False)
+
+# Dump 'coefficients_df' DataFrame into 'coefficients_df' table
+with engine.connect() as conn:
+    conn.execute(text("DROP TABLE IF EXISTS coefficients_df CASCADE;"))
+coefficients_df.to_sql("coefficients_df", engine, if_exists="replace", index=False)
