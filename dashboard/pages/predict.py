@@ -10,7 +10,6 @@ from decimal import Decimal
 from sqlalchemy import create_engine
 import numpy as np
 from sklearn.linear_model import LinearRegression
-import matplotlib.pyplot as plt 
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import RandomForestClassifier
@@ -57,17 +56,20 @@ y_true_full_oversampled = np.array(y_full_oversampled)
 # Use the predictor
 def get_demographic_value(GM_id, stat, year):
   try:    #check for existing value first
-    value = float(clean_demo_data.loc[clean_demo_data['municipality_id'] == GM_id].loc[clean_demo_data['year'] == year][stat])
+    value = clean_demo_data.loc[clean_demo_data['municipality_id'] == GM_id].loc[clean_demo_data['year'] == year][stat]
+    value = float(value.iloc[0])
 
   except: # if no existing value is found, extrapolate from linear regression coefficients table
     slope = coefficients_df[stat + "_slope"][coefficients_df['municipality_id'] == GM_id]
     intercept = coefficients_df[stat + "_intercept"][coefficients_df['municipality_id'] == GM_id]
-    value = float(year * slope + intercept)
+    value = year * slope + intercept
+    value = float(value.iloc[0])
 
     # if the value goes to zero due to a downwards trend, use the last non-zero prediction
     while value <= 0:
       year -= 1
-      value = float(year * slope + intercept)
+      value = year * slope + intercept
+      value = float(value.iloc[0])
 
   return value
 
@@ -93,17 +95,28 @@ def get_all_default_predictions(GM_id, year):
   # print(values)
   values_df = pd.DataFrame(columns = feature_names)
   values_df.loc[0] = values
+  values_df['year'] = year
   return values_df
 
 
 def predict_crime_class(GM_id, year, classifier = final_rf_classifier):
   values_df = get_all_default_predictions(GM_id, year)
-  return str(classifier.predict(values_df)[0])
+  values_df.drop('year', axis=1, inplace=True)
+  return str(final_rf_classifier.predict(values_df)[0])
 
-print("all predictions in GM0014 in 2033")
-print(get_all_default_predictions("GM0014", 2033), '\n')
+def add_crime_class_predictions(GM_id, df):
+    # Create a new column 'crime_class' to store the predictions
+    df['crime_class'] = ''
 
-print("crime category prediction in GM0014 in 2033 is:", predict_crime_class("GM0014", 2033))
+    # Iterate over rows and call predict_crime_class for each year
+    for index, row in df.iterrows():
+        year = row['year']
+        features = row.drop(['year', 'crime_class']).values  # Exclude 'year' and 'crime_class' columns
+        predicted_class = predict_crime_class(GM_id, year, features)
+        df.at[index, 'crime_class'] = predicted_class
+
+    return df
+
 
 
 ## +++++++++++++++++
@@ -119,30 +132,14 @@ def layout(stat_code=None):
             dcc.Location(id='url', refresh=False),
             html.H1(f'Predict future municipal statistics - {municipal_name}'),
             html.Div(f"Municipality code: {stat_code}"),
-            dcc.Dropdown(
-                id='year-dropdown-2',
-                options=[
-                    {'label': str(year), 'value': year} for year in range(2013, 2022)
-                ],
-                value=2021,
-                style={'width': '50%'}
-            ),
-            html.Div([
-                html.Div([
-                    dcc.Graph(id='pie-chart-2'),
-                ], style={'width': '48%', 'display': 'inline-block'}),
-                html.Div([
-                    dcc.Graph(id='crime-scatter-2')
-                ], style={'width': '48%', 'display': 'inline-block'}),
-            ]),
             html.Div([
                 dcc.Loading(
-                    id="loading-table",
+                    id="loading-table-2",
                     type="circle",
                     children=[html.Div(id="data-table-2", style={'paddingBottom': '50px'}),
                                 dbc.Alert(id='tbl_out-2', color='secondary')],
                 )
-            ])        
+            ]),  
         ], style={'paddingTop': '50px'})
     else:
         return html.Div([
@@ -153,25 +150,33 @@ def layout(stat_code=None):
             ])        
 
 @callback(
-    [Output('data-table-2', 'children'),
-     Output('pie-chart-2', 'figure'),
-     Output('crime-scatter-2', 'figure')],
-    [Input('year-dropdown-2', 'value'),
-     Input('url', 'pathname')]
+    Output('data-table-2', 'children'),
+     Input('url', 'pathname')
 )
-def update_data(current_year, pathname):
+def update_data(pathname):
     stat_code = pathname.split('/')[-1]
     data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
-    table = generate_table(data)
+    
+    # In region.py, we can simply obtain the data over the last few years. This is not possible in prediction, so we'll predict it
+    initial_df = get_all_default_predictions(stat_code, 2022)
+    all_predictions_df = pd.DataFrame(columns=initial_df.columns)
+    # Initialize an empty list to store all predictions
+    all_predictions = []
+    for year in range(2023, 2050):
+        predictions_for_year = get_all_default_predictions(stat_code, year)
+        all_predictions.append(predictions_for_year)
+    
+    if len(all_predictions) > 0:
+        all_predictions_df = pd.concat(all_predictions, ignore_index=True)
 
-    # Create a pie chart
-    fig = generate_pie_chart(current_year, data)
+    all_predictions_df_crimes = add_crime_class_predictions(stat_code, all_predictions_df)
+    print(all_predictions_df_crimes)
+    table = generate_table(all_predictions_df_crimes)
 
-    # Create the crime scatter plot
-    crimescatter = generate_crime_scatter(stat_code, current_year)
-    return table, fig, crimescatter
+    print(all_predictions_df_crimes.head())
+    return table
 
-def generate_table(dataframe, max_rows=15):
+def generate_table(dataframe, max_rows=50):
     column_labels = {
         'year': 'Year',
         'population': 'Population',
@@ -179,7 +184,7 @@ def generate_table(dataframe, max_rows=15):
         'population_density': 'Population Density',
         'avg_income_per_recipient': 'Average Income per Recipient',
         'unemployment_rate': 'Unemployment Rate (%)',
-        'crime_score': 'Crime score',
+        'crime_class': 'Crime score',
     }    
 
     column_hints = {
@@ -188,7 +193,7 @@ def generate_table(dataframe, max_rows=15):
         'population_density': 'The average number of people per square kilometer',
         'avg_income_per_recipient': 'The arithmetic average personal income per person based on persons with personal income',
         'unemployment_rate': 'The unemployment rate based on the percentage of people with an unemployment benefits  (%)',
-        'crime_score': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a long prison sentence will impact the score more compared to a sentence of several months.'
+        'crime_class': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a long prison sentence will impact the score more compared to a sentence of several months.'
     }    
     # Create DataTable columns
     columns = [{'name': column_labels[col], 'id': col} for col in column_labels]
@@ -211,17 +216,6 @@ def generate_table(dataframe, max_rows=15):
         sort_mode='single', 
         sort_by=[{'column_id': 'year', 'direction': 'desc'}],
         tooltip_header={col: f'Explanation: {column_hints[col]}' for col in column_hints},
-        tooltip_data=[{
-        'crime_score': {
-            'value': 'Compared to the rest of The Netherlands, this is doing **{} {}** than other municipalities'.format(
-                '66%' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'high_crime' else '33%',
-                'better' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'medium_crime' else 'worse'
-                
-            ),
-            'type': 'markdown'
-        }
-    } for row in rows],
-
         style_header_conditional=[{
         'if': {'column_id': col},
         'textDecoration': 'underline',
@@ -229,132 +223,13 @@ def generate_table(dataframe, max_rows=15):
     } for col in column_hints]
 
     )
-    
-def generate_pie_chart(selected_year:int, dataframe):
-    # Function to create a pie chart using Plotly Express
-    pie_df = dataframe[dataframe['year'] == selected_year]
-    if not (pie_df.empty or pd.isna(pie_df.iloc[0]['low_educated_population'])):
-        pie_dfs = pie_df.iloc[0]
 
-        data = {
-            'low_educated_population': pie_dfs['low_educated_population']*100,
-            'medium_educated_population': pie_dfs['medium_educated_population']*100,
-            'high_educated_population': pie_dfs['high_educated_population']*100
-        }
-        data = {k:[v] for k,v in data.items()}
-        df = pd.DataFrame(data)
-        legend_names = ['Low Educated', 'Medium Educated', 'High Educated']
-
-
-        fig = px.pie(df, 
-                values=df.iloc[0], 
-                names = ['Low Educated', 'Medium Educated', 'High Educated'],
-                title=f'Distribution of education levels in {selected_year}')
-    else:
-        fig = px.scatter(x=[0], y=[0], text=["No data available"])
-        # Update layout for better appearance (optional)
-        fig.update_layout(
-            width=400,
-            height=300,
-            title="Educational Distribution",
-            template="plotly_white"  # You can choose different templates
-        )
-
-        # Hide the axis to make it cleaner
-        fig.update_xaxes(visible=False)
-        fig.update_yaxes(visible=False) 
-        fig.update_traces(marker=dict(size=0))
-    return fig
-
-def generate_crime_scatter(statcode, selected_year:int):
-    #SELECT crime_data.crime_code AS crime_code, registered_crimes, max_jailtime_yrs FROM crime_data, crime_type WHERE crime_data.crime_code = crime_type.crime_code AND year = '2022' AND municipality_id = 'GM0197'
-    data = pd.read_sql_query(f"SELECT crime_data.crime_code AS crime_code, registered_crimes, max_jailtime_yrs, category FROM crime_data, crime_type WHERE crime_data.crime_code = crime_type.crime_code AND year = '{selected_year}' AND municipality_id = '{statcode}'", engine)
-    # The complete table provided earlier
-    crime_table = {
-        '1.1.1': 'Theft/Burglary Home',
-        '1.1.2': 'Theft/Burglary Box/Garage/Shed',
-        '1.2.1': 'Theft from/of Motor Vehicles',
-        '1.2.2': 'Theft of Motor Vehicles',
-        '1.2.3': 'Theft of Mopeds, Mustaches, and Bicycles',
-        '1.2.4': 'Pickpocketing',
-        '1.2.5': 'Theft from/of Public Transport Vehicles',
-        '1.3.1': 'Accidents (Road)',
-        '1.4.1': 'Sexual Offense (Rape, Public Indecency, Indecent Assault, Pornography)',
-        '1.4.2': 'Murder, Manslaughter',
-        '1.4.3': 'Public Violence (Person)',
-        '1.4.4': 'Threatening',
-        '1.4.5': 'Abuse',
-        '1.4.6': 'Street Robbery',
-        '1.4.7': 'Robbery',
-        '1.5.2': 'Thefts (Water)',
-        '1.6.1': 'Fire/Explosion',
-        '1.6.2': 'Other Property Crimes',
-        '1.6.3': 'Human Trafficking',
-        '2.1.1': 'Drugs/Drinking Nuisance',
-        '2.2.1': 'Destruction or Property Damage',
-        '2.4.1': 'Neighborhood Rumor (Relationship Problems)',
-        '2.4.2': 'Trespassing',
-        '2.5.1': 'Theft/Burglary Companies, etc.',
-        '2.5.2': 'Shoplifting',
-        '2.6.1': 'Organization of the Environmental Management Act',
-        '2.6.2': 'Soil',
-        '2.6.3': 'Water',
-        '2.6.4': 'Waste',
-        '2.6.5': 'Building Materials',
-        '2.6.7': 'Manure',
-        '2.6.8': 'Transport of Hazardous Substances',
-        '2.6.9': 'Fireworks',
-        '2.6.10': 'Pesticides',
-        '2.6.11': 'Nature and Landscape',
-        '2.6.12': 'Spatial Planning',
-        '2.6.13': 'Animals',
-        '2.6.14': 'Food Safety',
-        '2.7.2': 'Special Laws (Illegal Gambling, Telecommunication Law, Money Laundering)',
-        '2.7.3': 'Livability (Other)',
-        '3.1.1': 'Drug Trafficking',
-        '3.1.2': 'Human Smuggling',
-        '3.1.3': 'Arms Trade',
-        '3.2.1': 'Child Pornography',
-        '3.2.2': 'Child Prostitution',
-        '3.3.2': 'Under the Influence (Air)',
-        '3.3.5': 'Air (Other)',
-        '3.4.2': 'Under the Influence (Water)',
-        '3.5.2': 'Under the Influence (Road)',
-        '3.5.5': 'Road (Other)',
-        '3.6.4': 'Damage to Public Order',
-        '3.7.1': 'Discrimination',
-        '3.7.2': 'Immigration Care',
-        '3.7.3': 'Societal Integrity',
-        '3.7.4': 'Cybercrime',
-        '3.9.1': 'Horizontal Fraud (Financial Crimes)',
-        '3.9.2': 'Vertical Fraud',
-        '3.9.3': 'Fraud (Other) (Using/Accepting Counterfeit Money or a Fake Police Report)'
-    }
-
-    # Map crime codes to titles and add a new 'title' column to the DataFrame
-    data['title'] = data['crime_code'].map(crime_table)
-    
-    fig = px.scatter(data, x="max_jailtime_yrs",
-                    y="registered_crimes", 
-                    color="category", 
-                    size="registered_crimes",  
-                    hover_data={'title': True, 'category':False} ,
-                    labels={'title':'Offence', 'registered_crimes':'Registered occurences', 'max_jailtime_yrs':'Maximum jailtime (years)', 
-                              'category':'Category'}, 
-                    title=f"Reported crime and maximum jail time in {selected_year}")
-    return fig
-
-@callback(Output('tbl_out-2', 'children'), [Input('data-table-2', 'active_cell'), Input('url', 'pathname')])
-def get_graph_over_time(active_cell, pathname):
+@callback(Output('tbl_out-2', 'children'), [Input('data-table-2', 'active_cell'), Input('url', 'pathname'), Input('data-table-2', 'data')])
+def get_graph_over_time(active_cell, pathname, dataframe):
     if active_cell:
-        stat_code = pathname.split('/')[-1]
         column_name = active_cell['column_id']
-        data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
-        data['avg_income_per_recipient'] = data['avg_income_per_recipient'].round(0)
-        data['unemployment_rate'] = (data['unemployment_rate'] * 100).round(2)
-
-        
-        fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} year over year')
-        return dcc.Graph(figure=fig, id='graph-over-time')
     else:
-        return "Click a cell in the table the to see the progress of this variable over time"
+        column_name = 'population'
+
+    fig = px.line(data_frame=dataframe, x="year", y=column_name, title=f'{column_name} year over year')
+    return dcc.Graph(figure=fig, id='graph-over-time')
