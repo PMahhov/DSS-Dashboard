@@ -44,6 +44,7 @@ layout = html.Div([
                 html.H5("More information", id="click_output"),
                 html.P("More statiscs are available for municipalities. Watch now!"),
                 dbc.Button("View more", color="primary", disabled=True, id="redirect-button"),
+                dbc.Button("Predict the future!", color="primary", disabled=True, id="redirect-button-2"),
             ]
         )
     ]),
@@ -109,7 +110,9 @@ def display_map(year):
 @callback(
     [Output('click_output', 'children'),
      Output('redirect-button', 'disabled'),
-     Output('redirect-button', 'href')],
+     Output('redirect-button', 'href'),
+     Output('redirect-button-2', 'disabled'),
+     Output('redirect-button-2', 'href')],
     [Input('shared-data', 'data'),
      Input('graph', 'clickData')]
 )
@@ -124,5 +127,6 @@ def display_click_data(shared_data, clickData):
         
         # Assuming you have a page for each municipality with the format '/municipality/{municipality_id}'
         page_link = f"/municipality/{municipality_id}"
+        page_link_prediction = f"/predict/{municipality_id}"
         
-        return f'You clicked on {region_name}.', False, page_link
+        return f'You clicked on {region_name}.', False, page_link, page_link_prediction
