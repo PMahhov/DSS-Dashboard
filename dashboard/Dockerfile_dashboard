@@ -23,5 +23,4 @@ EXPOSE 5000
 ENV FLASK_APP app.py
 
 # Run the Flask app
-RUN python import_data.py
-CMD python app.py
+CMD ["python import_data.py" && "python app.py"]
