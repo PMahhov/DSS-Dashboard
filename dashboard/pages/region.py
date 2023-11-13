@@ -15,17 +15,21 @@ engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboar
 pd.set_option('max_colwidth', None)
 
 def layout(stat_code=None):
-    municipal_name = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}'", engine)
-    if not (municipal_name.empty or pd.isna(municipal_name.iloc[0]['municipality_name'])):
-        municipal_name = municipal_name.iloc[0]['municipality_name']
-        return html.Div([
+    municipal_name = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}' LIMIT 1", engine)
+    try:
+        municipal_name_defined = municipal_name.iloc[0]['municipality_name']
+    except IndexError:
+        municipal_name_defined = pd.DataFrame({'A' : []})
+    tab1_content = dbc.Card(
+    dbc.CardBody(
+        [
             dcc.Location(id='url', refresh=False),
-            html.H1(f'View municipal statistics - {municipal_name}'),
+            html.H1(f'View municipal statistics - {municipal_name_defined}'),
             html.Div(f"Municipality code: {stat_code}"),
             dcc.Dropdown(
                 id='year-dropdown',
                 options=[
-                    {'label': str(year), 'value': year} for year in range(2014, 2022)
+                    {'label': str(year), 'value': year} for year in range(2013, 2022)
                 ],
                 value=2021,
                 style={'width': '50%'}
@@ -45,7 +49,18 @@ def layout(stat_code=None):
                         children=[html.Div(id="data-table")],
                     )
                 ]),
-        ])
+        ],
+    ),
+    className="mt-3",
+    )
+    if not (municipal_name.empty or pd.isna(municipal_name.iloc[0]['municipality_name'])):
+        municipal_name = municipal_name.iloc[0]['municipality_name']
+        return html.Div([
+        dbc.Tabs(
+        [
+        dbc.Tab(tab1_content, label="History"),
+        ]
+        )], style={'paddingTop': '50px'})
     else:
         return html.Div([
             dcc.Location(id='url', refresh=False),
@@ -64,7 +79,7 @@ def layout(stat_code=None):
 def update_data(current_year, pathname):
     print('Current year', current_year)
     stat_code = pathname.split('/')[-1]
-    data = pd.read_sql_query(f"SELECT * FROM demo_data WHERE municipality_id = '{stat_code}'", engine)    
+    data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
     table = generate_table(data)
 
     # Create a pie chart
@@ -81,7 +96,8 @@ def generate_table(dataframe, max_rows=15):
         'household_size': 'Household Size',
         'population_density': 'Population Density',
         'avg_income_per_recipient': 'Average Income per Recipient',
-        'unemployment_rate': 'Unemployment Rate (%)'
+        'unemployment_rate': 'Unemployment Rate (%)',
+        'crime_score': 'Crime score',
     }    
 
     column_hints = {
@@ -89,7 +105,8 @@ def generate_table(dataframe, max_rows=15):
         'household_size': 'The average number of people per household',
         'population_density': 'The average number of people per square kilometer',
         'avg_income_per_recipient': 'The arithmetic average personal income per person based on persons with personal income',
-        'unemployment_rate': 'The unemployment rate based on the percentage of people with an unemployment benefits  (%)'
+        'unemployment_rate': 'The unemployment rate based on the percentage of people with an unemployment benefits  (%)',
+        'crime_score': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a 10 year prison sentence will impact the score more.'
     }    
     # Create DataTable columns
     columns = [{'name': column_labels[col], 'id': col} for col in column_labels]
@@ -140,7 +157,7 @@ def generate_pie_chart(selected_year:int, dataframe):
         fig = px.pie(df, 
                 values=df.iloc[0], 
                 names = ['Low Educated', 'Medium Educated', 'High Educated'],
-                title='Educational Distribution')
+                title=f'Distribution of education levels in {selected_year}')
     else:
         fig = px.scatter(x=[0], y=[0], text=["No data available"])
         # Update layout for better appearance (optional)
@@ -176,7 +193,7 @@ def generate_crime_scatter(statcode, selected_year:int):
         '1.4.4': 'Threatening',
         '1.4.5': 'Abuse',
         '1.4.6': 'Street Robbery',
-        '1.4.7': 'Robbery ',
+        '1.4.7': 'Robbery',
         '1.5.2': 'Thefts (Water)',
         '1.6.1': 'Fire/Explosion',
         '1.6.2': 'Other Property Crimes',
@@ -184,9 +201,9 @@ def generate_crime_scatter(statcode, selected_year:int):
         '2.1.1': 'Drugs/Drinking Nuisance',
         '2.2.1': 'Destruction or Property Damage',
         '2.4.1': 'Neighborhood Rumor (Relationship Problems)',
-        '2.4.2': 'Trespassing (1 year)',
+        '2.4.2': 'Trespassing',
         '2.5.1': 'Theft/Burglary Companies, etc.',
-        '2.5.2': 'Shoplifting (4 years)',
+        '2.5.2': 'Shoplifting',
         '2.6.1': 'Organization of the Environmental Management Act',
         '2.6.2': 'Soil',
         '2.6.3': 'Water',
@@ -202,22 +219,22 @@ def generate_crime_scatter(statcode, selected_year:int):
         '2.6.14': 'Food Safety',
         '2.7.2': 'Special Laws (Illegal Gambling, Telecommunication Law, Money Laundering)',
         '2.7.3': 'Livability (Other)',
-        '3.1.1': 'Drug Trafficking (12 years)',
+        '3.1.1': 'Drug Trafficking',
         '3.1.2': 'Human Smuggling',
-        '3.1.3': 'Arms Trade (8 years)',
+        '3.1.3': 'Arms Trade',
         '3.2.1': 'Child Pornography',
         '3.2.2': 'Child Prostitution',
         '3.3.2': 'Under the Influence (Air)',
         '3.3.5': 'Air (Other)',
         '3.4.2': 'Under the Influence (Water)',
         '3.5.2': 'Under the Influence (Road)',
-        '3.5.5': 'Road (Other) (3 months)',
+        '3.5.5': 'Road (Other)',
         '3.6.4': 'Damage to Public Order',
         '3.7.1': 'Discrimination',
         '3.7.2': 'Immigration Care',
         '3.7.3': 'Societal Integrity',
         '3.7.4': 'Cybercrime',
-        '3.9.1': 'Horizontal Fraud (Financial Crimes, 4 years)',
+        '3.9.1': 'Horizontal Fraud (Financial Crimes)',
         '3.9.2': 'Vertical Fraud',
         '3.9.3': 'Fraud (Other) (Using/Accepting Counterfeit Money or a Fake Police Report)'
     }
@@ -225,5 +242,12 @@ def generate_crime_scatter(statcode, selected_year:int):
     # Map crime codes to titles and add a new 'title' column to the DataFrame
     data['title'] = data['crime_code'].map(crime_table)
     
-    fig = px.scatter(data, x="max_jailtime_yrs", y="registered_crimes", color="category", size="registered_crimes",  hover_data={'title': True, 'category':False} ,labels={'title':'Offence', 'registered_crimes':'Registered offences', 'max_jailtime_yrs':'Maximum jailtime (years)', 'category':'Category'}, title="Reported crime and maximum jail time")
+    fig = px.scatter(data, x="max_jailtime_yrs",
+                    y="registered_crimes", 
+                    color="category", 
+                    size="registered_crimes",  
+                    hover_data={'title': True, 'category':False} ,
+                    labels={'title':'Offence', 'registered_crimes':'Registered offences', 'max_jailtime_yrs':'Maximum jailtime (years)', 
+                              'category':'Category'}, 
+                    title=f"Reported crime and maximum jail time in {selected_year}")
     return fig
