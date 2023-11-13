@@ -43,8 +43,8 @@ layout = html.Div([
             [
                 html.H5("More information", id="click_output"),
                 html.P("More statiscs are available for municipalities. Watch now!"),
-                dbc.Button("View more", color="primary", disabled=True, id="redirect-button"),
-                dbc.Button("Predict the future!", color="primary", disabled=True, id="redirect-button-2"),
+                html.Div([dbc.Button("View more", color="primary", disabled=True, id="redirect-button", style={"margin-right": "10px"}),
+                dbc.Button("Predict the future!", color="primary", disabled=True, id="redirect-button-2")]),
             ]
         )
     ]),
@@ -118,7 +118,7 @@ def display_map(year):
 )
 def display_click_data(shared_data, clickData):
     if clickData is None:
-        return 'Click on a municipality to see more details', True, '#'
+        return 'Click on a municipality to see more details', True, '#', True, '#'
     else:
         gdf_choro = gpd.GeoDataFrame.from_features(json.loads(shared_data))
         point_idx = clickData['points'][0]['pointIndex']
