@@ -13,4 +13,4 @@ geopandas
 cbsodata
 imblearn
 matplotlib
-sklearn
+scikit-learn
