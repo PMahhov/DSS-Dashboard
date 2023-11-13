@@ -52,7 +52,10 @@ layout = html.Div([
         dbc.Accordion(
             [
                 dbc.AccordionItem(
-                    "aaaaaa", title="What are the scores I see on the screen?"
+                    "You see a crime score on your screen! This may be a bit vague, but the crime score is a normalised score of the crime occuring in specific municipality. \
+                        The amount of crime is taken, and measured per capita.\
+                        Then, weights are applied regarding the severity. The maximum penalty for a crime is taken as the weight. This way, a murder is weighted more heavily than theft.\
+                        Then, a label is assigned to the crime score. 33% of municipalities are low, 33% have medium and another 33% have high crime rate.", title="What are the scores I see on the screen?"
                 ),
                 dbc.AccordionItem(
                     "bbbbb", title="What are the spots on the map without a colour?"
