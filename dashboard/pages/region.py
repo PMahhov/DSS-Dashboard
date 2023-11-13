@@ -46,7 +46,8 @@ def layout(stat_code=None):
                     dcc.Loading(
                         id="loading-table",
                         type="circle",
-                        children=[html.Div(id="data-table")],
+                        children=[html.Div(id="data-table", style={'paddingBottom': '50px'}),
+                                  dbc.Alert(id='tbl_out', color='secondary')],
                     )
                 ]),
         ],
@@ -77,7 +78,6 @@ def layout(stat_code=None):
      Input('url', 'pathname')]
 )
 def update_data(current_year, pathname):
-    print('Current year', current_year)
     stat_code = pathname.split('/')[-1]
     data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
     table = generate_table(data)
@@ -106,7 +106,7 @@ def generate_table(dataframe, max_rows=15):
         'population_density': 'The average number of people per square kilometer',
         'avg_income_per_recipient': 'The arithmetic average personal income per person based on persons with personal income',
         'unemployment_rate': 'The unemployment rate based on the percentage of people with an unemployment benefits  (%)',
-        'crime_score': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a 10 year prison sentence will impact the score more.'
+        'crime_score': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a long prison sentence will impact the score more compared to a sentence of several months.'
     }    
     # Create DataTable columns
     columns = [{'name': column_labels[col], 'id': col} for col in column_labels]
@@ -129,6 +129,17 @@ def generate_table(dataframe, max_rows=15):
         sort_mode='single', 
         sort_by=[{'column_id': 'year', 'direction': 'desc'}],
         tooltip_header={col: f'Explanation: {column_hints[col]}' for col in column_hints},
+        tooltip_data=[{
+        'crime_score': {
+            'value': 'Compared to the rest of The Netherlands, this is doing **{} {}** than other municipalities'.format(
+                '66%' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'high_crime' else '33%',
+                'better' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'medium_crime' else 'worse'
+                
+            ),
+            'type': 'markdown'
+        }
+    } for row in rows],
+
         style_header_conditional=[{
         'if': {'column_id': col},
         'textDecoration': 'underline',
@@ -142,7 +153,6 @@ def generate_pie_chart(selected_year:int, dataframe):
     pie_df = dataframe[dataframe['year'] == selected_year]
     if not (pie_df.empty or pd.isna(pie_df.iloc[0]['low_educated_population'])):
         pie_dfs = pie_df.iloc[0]
-        print(pie_dfs)
 
         data = {
             'low_educated_population': pie_dfs['low_educated_population']*100,
@@ -251,3 +261,18 @@ def generate_crime_scatter(statcode, selected_year:int):
                               'category':'Category'}, 
                     title=f"Reported crime and maximum jail time in {selected_year}")
     return fig
+
+@callback(Output('tbl_out', 'children'), [Input('data-table', 'active_cell'), Input('url', 'pathname')])
+def get_graph_over_time(active_cell, pathname):
+    if active_cell:
+        stat_code = pathname.split('/')[-1]
+        column_name = active_cell['column_id']
+        data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
+        data['avg_income_per_recipient'] = data['avg_income_per_recipient'].round(0)
+        data['unemployment_rate'] = (data['unemployment_rate'] * 100).round(2)
+
+        
+        fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} year over year')
+        return dcc.Graph(figure=fig, id='graph-over-time')
+    else:
+        return "Click a cell in the table the to see the progress of this variable over time"
