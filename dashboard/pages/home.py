@@ -59,13 +59,13 @@ layout = html.Div([
                         Then, a label is assigned to the crime score. 33% of municipalities are low, 33% have medium and another 33% have high crime rate.", title="What are the scores I see on the screen?"
                 ),
                 dbc.AccordionItem(
-                    "bbbbb", title="What are the spots on the map without a colour?"
+                    "There have been many different mergers of municipalities over the last few years. As it would not give a correct overview with all the variety, only municipalities existing in 2023 have been included.", title="What are the spots on the map without a colour?"
                 ),
                 dbc.AccordionItem(
-                    "cccc", title="Huh, where is the red?"
+                    "The Netherlands has become quite safe over the last few years. Even better, crime has actually come down. If you look at different years, you will see more red.", title="Huh, where is the red?"
                 ),
                 dbc.AccordionItem(
-                    "cccc", title="Data sources"
+                    "Data is powered by Mapbox for the map textures, with geodata and statistics from Statistics Netherlands (CBS).", title="Data sources"
                 ),
             ],
             flush=True,
