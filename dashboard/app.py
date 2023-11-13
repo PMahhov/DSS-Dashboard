@@ -10,7 +10,8 @@ import plotly.express as px
 #This creates the navbar that is visible above. It is called later in the app
 navbar = dbc.NavbarSimple(
     children=[
-        dbc.NavItem(dbc.NavLink("Page 1", href="/")),
+        dbc.NavItem(dbc.NavLink("Visit Amsterdam!", href="/municipality/GM0363")),
+        dbc.NavItem(dbc.NavLink("Predict and ", href="/municipality/GM0363")),
         dbc.DropdownMenu(
             children=[
                 dbc.DropdownMenuItem("More pages", header=True),
@@ -23,7 +24,7 @@ navbar = dbc.NavbarSimple(
         ),
     ],
     brand="Crimestat",
-    brand_href="#",
+    brand_href="/",
     color="primary",
     dark=True,
 )

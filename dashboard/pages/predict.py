@@ -8,24 +8,197 @@ from dash import html
 import pandas as pd
 from decimal import Decimal
 from sqlalchemy import create_engine
+import numpy as np
+from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt 
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
+from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import RandomForestClassifier
 
-dash.register_page(__name__, path_template="/municipality/<stat_code>")
+
 engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
+clean_demo_data = pd.read_sql_query("select * from demo_data WHERE year >= 2013 AND year <= 2022", engine)    
+
+
+pop_df = clean_demo_data
+
+groups = pop_df.groupby('municipality_id')
+
+
+# Initialize DataFrame to store the coefficients
+
+coefs_columns = ['municipality_id']
+
+
+groups = pop_df.groupby('municipality_id')
+
+# print(coefficients_df)
+
+first_loop = True
+
+feature_names = list(pop_df)[1:-2]
+feature_names.append(list(pop_df)[-1])
+
+for municipality_id, group_data in groups:
+  # print(municipality_id,"calculating")
+
+  row_coefs = [municipality_id]
+
+  # print("list pop df:",list(pop_df)[1:])
+  for dem_item in feature_names:
+    # print(municipality_id, dem_item)
+
+    X = group_data['year'].values.reshape(-1,1)
+    y = group_data[dem_item].values
+
+    model = LinearRegression()
+
+    # print("X:",X)
+    # print("y:",y)
+
+    while pd.isnull(y[0]):
+      # print("before beginning nan cull:",X,y)
+      y = y[1:]
+      if len(X) > len(y):
+        X = X[1:]
+      # print("after nan cull:",X,y)
+      if len(y) == 0 or len(X)==0:
+        raise ValueError("Empty set after beginning nan cull")
+
+    while pd.isnull(y[-1]):
+      # print("before end nan cull:",X,y)
+      y = y[:-1]
+      if len(X) != len(y):
+        X = X[:-1]
+      # print("after end nan cull:",X,y)
+      if len(y) == 0 or len(X)==0:
+        raise ValueError("Empty set after end nan cull")
+
+    for i in y:
+      if pd.isnull(i):
+        raise ValueError("There are remaining nans in data")
+
+    # print("X,y before fit",X,y)
+    model.fit(X,y)
+
+    current_intercept = model.intercept_
+    current_slope = model.coef_[0]
+
+
+    # if first_loop or dem_item+"_intercept" not in coefs_columns:
+    if first_loop:
+      coefs_columns.append(dem_item + "_intercept")
+      coefs_columns.append(dem_item + "_slope")
+
+    row_coefs.append(current_intercept)
+    row_coefs.append(current_slope)
+
+
+
+  if first_loop:
+    coefficients_df = pd.DataFrame(columns= coefs_columns)
+    first_loop = False
+
+  # print(len(coefs_columns),"coefs_columns:",coefs_columns)
+  # print(len(row_coefs),"row_coefs",row_coefs)
+  coefficients_df.loc[len(coefficients_df)] = row_coefs
+
+
+print(coefficients_df.head(6))
+
+# Create classifier
+smote = SMOTE(sampling_strategy='auto', random_state=427)
+X_full_oversampled, y_full_oversampled = smote.fit_resample(X, y)
+best_params_custom = {
+    'n_estimators': 300,
+    'min_samples_split': 10,
+    'min_samples_leaf': 1,
+    'max_features': 'sqrt',
+    'max_depth': 10,
+    'class_weight': 'balanced_subsample'
+}
+
+# from sklearn.metrics._plot.precision_recall_curve import average_precision_score
+final_rf_classifier = RandomForestClassifier(random_state=427, n_estimators=best_params_custom['n_estimators'],
+                                       max_depth=best_params_custom['max_depth'],
+                                       min_samples_split = best_params_custom['min_samples_split'],
+                                       min_samples_leaf = best_params_custom['min_samples_leaf'],
+                                      #  class_weight = best_params_custom['class_weight'],
+                                      # class_weight = None,
+                                       max_features = best_params_custom['max_features'])
+final_rf_classifier.fit(X_full_oversampled, y_full_oversampled)
+
+y_pred_full_oversampled = final_rf_classifier.predict(X_full_oversampled)
+y_true_full_oversampled = np.array(y_full_oversampled)
+
+
+# Use the predictor
+def get_demographic_value(GM_id, stat, year):
+  try:    #check for existing value first
+    value = float(clean_demo_data.loc[clean_demo_data['municipality_id'] == GM_id].loc[clean_demo_data['year'] == year][stat])
+
+  except: # if no existing value is found, extrapolate from linear regression coefficients table
+    slope = coefficients_df[stat + "_slope"][coefficients_df['municipality_id'] == GM_id]
+    intercept = coefficients_df[stat + "_intercept"][coefficients_df['municipality_id'] == GM_id]
+    value = float(year * slope + intercept)
+
+    # if the value goes to zero due to a downwards trend, use the last non-zero prediction
+    while value <= 0:
+      year -= 1
+      value = float(year * slope + intercept)
+
+  return value
+
+
+print("unemployment rate in GM0014:")
+print("2010:",get_demographic_value("GM0014","unemployment_rate",2010))
+print("2015:",get_demographic_value("GM0014","unemployment_rate",2015))
+print("2020:",get_demographic_value("GM0014","unemployment_rate",2020))
+print("2025:",get_demographic_value("GM0014","unemployment_rate",2025))
+print("2030:",get_demographic_value("GM0014","unemployment_rate",2030))
+print("2035",get_demographic_value("GM0014","unemployment_rate",2035))
+print("2040:",get_demographic_value("GM0014","unemployment_rate",2040))
+print("2045:",get_demographic_value("GM0014","unemployment_rate",2045))
+print("2045:",get_demographic_value("GM0014","unemployment_rate",2050), '\n')
+
+
+def get_all_default_predictions(GM_id, year):
+  values = []
+  for feature in feature_names:
+    value = get_demographic_value(GM_id, feature, year)
+    # values[feature] = value
+    values.append(value)
+  # print(values)
+  values_df = pd.DataFrame(columns = feature_names)
+  values_df.loc[0] = values
+  return values_df
+
+
+def predict_crime_class(GM_id, year, classifier = final_rf_classifier):
+  values_df = get_all_default_predictions(GM_id, year)
+  return str(classifier.predict(values_df)[0])
+
+print("all predictions in GM0014 in 2033")
+print(get_all_default_predictions("GM0014", 2033), '\n')
+
+print("crime category prediction in GM0014 in 2033 is:", predict_crime_class("GM0014", 2033))
+
+
+## +++++++++++++++++
+## ACTUAL PAGE
+## ++++++++++++++++
+dash.register_page(__name__, path_template="/predict/<stat_code>")
 
 def layout(stat_code=None):
     municipal_name = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}' LIMIT 1", engine)
-    try:
-        municipal_name_defined = municipal_name.iloc[0]['municipality_name']
-    except IndexError:
-        municipal_name_defined = pd.DataFrame({'A' : []})
-    tab1_content = dbc.Card(
-    dbc.CardBody(
-        [
+    if not (municipal_name.empty or pd.isna(municipal_name.iloc[0]['municipality_name'])):
+        municipal_name = municipal_name.iloc[0]['municipality_name']
+        return html.Div([
             dcc.Location(id='url', refresh=False),
-            html.H1(f'View municipal statistics - {municipal_name_defined}'),
+            html.H1(f'Predict future municipal statistics - {municipal_name}'),
             html.Div(f"Municipality code: {stat_code}"),
             dcc.Dropdown(
-                id='year-dropdown',
+                id='year-dropdown-2',
                 options=[
                     {'label': str(year), 'value': year} for year in range(2013, 2022)
                 ],
@@ -34,41 +207,21 @@ def layout(stat_code=None):
             ),
             html.Div([
                 html.Div([
-                    dcc.Graph(id='pie-chart'),
+                    dcc.Graph(id='pie-chart-2'),
                 ], style={'width': '48%', 'display': 'inline-block'}),
                 html.Div([
-                    dcc.Graph(id='crime-scatter')
+                    dcc.Graph(id='crime-scatter-2')
                 ], style={'width': '48%', 'display': 'inline-block'}),
             ]),
-                html.Div([
-                    dcc.Loading(
-                        id="loading-table",
-                        type="circle",
-                        children=[html.Div(id="data-table", style={'paddingBottom': '50px'}),
-                                  dbc.Alert(id='tbl_out', color='secondary')],
-                    )
-                ]),
-        ],
-    ),
-    className="mt-3",
-    )
-    tab2_content = dbc.Card(
-    dbc.CardBody(
-        [
-            None
-        ],
-    ),
-    className="mt-3",
-    )
-    if not (municipal_name.empty or pd.isna(municipal_name.iloc[0]['municipality_name'])):
-        municipal_name = municipal_name.iloc[0]['municipality_name']
-        return html.Div([
-        dbc.Tabs(
-        [
-        dbc.Tab(tab1_content, label="History"),
-        dbc.Tab(tab2_content, label="Compare"),
-        ]
-        )], style={'paddingTop': '50px'})
+            html.Div([
+                dcc.Loading(
+                    id="loading-table",
+                    type="circle",
+                    children=[html.Div(id="data-table-2", style={'paddingBottom': '50px'}),
+                                dbc.Alert(id='tbl_out-2', color='secondary')],
+                )
+            ])        
+        ], style={'paddingTop': '50px'})
     else:
         return html.Div([
             dcc.Location(id='url', refresh=False),
@@ -78,10 +231,10 @@ def layout(stat_code=None):
             ])        
 
 @callback(
-    [Output('data-table', 'children'),
-     Output('pie-chart', 'figure'),
-     Output('crime-scatter', 'figure')],
-    [Input('year-dropdown', 'value'),
+    [Output('data-table-2', 'children'),
+     Output('pie-chart-2', 'figure'),
+     Output('crime-scatter-2', 'figure')],
+    [Input('year-dropdown-2', 'value'),
      Input('url', 'pathname')]
 )
 def update_data(current_year, pathname):
@@ -126,7 +279,7 @@ def generate_table(dataframe, max_rows=15):
     rows = dataframe.to_dict('records')
     
     return dash_table.DataTable(
-        id='data-table',
+        id='data-table-2',
         columns=columns,
         data=rows,
         style_table={'overflowX': 'auto'},
@@ -269,7 +422,7 @@ def generate_crime_scatter(statcode, selected_year:int):
                     title=f"Reported crime and maximum jail time in {selected_year}")
     return fig
 
-@callback(Output('tbl_out', 'children'), [Input('data-table', 'active_cell'), Input('url', 'pathname')])
+@callback(Output('tbl_out-2', 'children'), [Input('data-table-2', 'active_cell'), Input('url', 'pathname')])
 def get_graph_over_time(active_cell, pathname):
     if active_cell:
         stat_code = pathname.split('/')[-1]

@@ -12,3 +12,5 @@ dash_bootstrap_components
 geopandas
 cbsodata
 imblearn
+matplotlib
+sklearn
