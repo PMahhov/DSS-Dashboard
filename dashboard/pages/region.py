@@ -84,8 +84,7 @@ def layout(stat_code=None):
             ])        
 
 @callback(
-    [Output('data-table', 'children'),
-     Output('pie-chart', 'figure'),
+    [Output('pie-chart', 'figure'),
      Output('crime-scatter', 'figure')],
     [Input('year-dropdown', 'value'),
      Input('url', 'pathname')]
@@ -94,74 +93,12 @@ def update_data(current_year, pathname):
     # Create a dataframe called data with the required columns for the table and pie chart.
     stat_code = pathname.split('/')[-1] # Obtain the municipality ID from the URL
     data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
-    table = generate_table(data)
-
     # Create a pie chart
     fig = generate_pie_chart(current_year, data)
 
     # Create the crime scatter plot
     crimescatter = generate_crime_scatter(stat_code, current_year)
-    return table, fig, crimescatter
-
-def generate_table(dataframe, max_rows=15):
-    # Add some human readable labels and explanation
-    column_labels = {
-        'year': 'Year',
-        'population': 'Population',
-        'household_size': 'Household Size',
-        'population_density': 'Population Density',
-        'avg_income_per_recipient': 'Average Income per Recipient',
-        'unemployment_rate': 'Unemployment Rate (%)',
-        'crime_score': 'Crime score',
-    }    
-
-    column_hints = {
-        'population': 'The number of people officially registered',
-        'household_size': 'The average number of people per household',
-        'population_density': 'The average number of people per square kilometer',
-        'avg_income_per_recipient': 'The arithmetic average personal income per person based on persons with personal income',
-        'unemployment_rate': 'The unemployment rate based on the percentage of people with an unemployment benefits  (%)',
-        'crime_score': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a long prison sentence will impact the score more compared to a sentence of several months.'
-    }    
-    # Create DataTable columns
-    columns = [{'name': column_labels[col], 'id': col} for col in column_labels]
-
-    # Round the 'avg_income_per_recipient' column to 0 decimal places and convert the 'unemployment_rate' to a percentage rounded to 2 decimals
-    dataframe['avg_income_per_recipient'] = dataframe['avg_income_per_recipient'].round(0)
-    dataframe['unemployment_rate'] = (dataframe['unemployment_rate'] * 100).round(2)
-    dataframe = dataframe.replace('', 'Not known yet')
-
-    rows = dataframe.to_dict('records') # The DataTable function requires a dictionary-based dataframe
-    
-    return dash_table.DataTable(
-        id='data-table',
-        columns=columns,
-        data=rows,
-        style_table={'overflowX': 'auto'},
-        style_cell={'textAlign': 'left'},
-        page_size=max_rows,
-        sort_action='native',  
-        sort_mode='single', 
-        sort_by=[{'column_id': 'year', 'direction': 'desc'}], # sort the table by year in descending order
-        tooltip_header={col: f'Explanation: {column_hints[col]}' for col in column_hints}, # when you hover over a column, this is what you see
-        tooltip_data=[{
-        'crime_score': { # when you hover over the crime_score label, you see a small tooltip with what it means
-            'value': 'Compared to the rest of The Netherlands, this is doing **{} {}** than other municipalities'.format(
-                '66%' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'high_crime' else '33%',
-                'better' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'medium_crime' else 'worse'
-                
-            ),
-            'type': 'markdown'
-        }
-    } for row in rows],
-
-        style_header_conditional=[{
-        'if': {'column_id': col},
-        'textDecoration': 'underline',
-        'textDecorationStyle': 'dotted',
-    } for col in column_hints]
-
-    )
+    return fig, crimescatter
     
 def generate_pie_chart(selected_year:int, dataframe):
     # Function to create a pie chart using Plotly Express
@@ -280,6 +217,7 @@ def generate_crime_scatter(statcode, selected_year:int):
 
 @callback(Output('tbl_out', 'children'), [Input('data-table', 'active_cell'), Input('url', 'pathname')])
 def get_graph_over_time(active_cell, pathname):
+    print(active_cell)
     # When you click on a table cell, you can see more statistics
     if active_cell:
         stat_code = pathname.split('/')[-1]
@@ -293,6 +231,77 @@ def get_graph_over_time(active_cell, pathname):
             fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} by year')
             return dcc.Graph(figure=fig, id='graph-over-time')
         else:  
-            return "Click a cell in the table the to see the progress of this variable over time"
+            return "Click a cell in the table the to see the progress of this variable over time (3)"
     else:
         return "Click a cell in the table the to see the progress of this variable over time"
+    
+@callback(
+    [Output('data-table', 'children')],
+    [Input('url', 'pathname')]
+)
+def update_datatable(pathname):
+    # Create a dataframe called data with the required columns for the table and pie chart.
+    stat_code = pathname.split('/')[-1] # Obtain the municipality ID from the URL
+    data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
+    table = generate_table(data)
+    return [table]
+
+def generate_table(dataframe, max_rows=15):
+    # Add some human readable labels and explanation
+    column_labels = {
+        'year': 'Year',
+        'population': 'Population',
+        'household_size': 'Household Size',
+        'population_density': 'Population Density',
+        'avg_income_per_recipient': 'Average Income per Recipient',
+        'unemployment_rate': 'Unemployment Rate (%)',
+        'crime_score': 'Crime score',
+    }    
+
+    column_hints = {
+        'population': 'The number of people officially registered',
+        'household_size': 'The average number of people per household',
+        'population_density': 'The average number of people per square kilometer',
+        'avg_income_per_recipient': 'The arithmetic average personal income per person based on persons with personal income',
+        'unemployment_rate': 'The unemployment rate based on the percentage of people with an unemployment benefits  (%)',
+        'crime_score': 'The crime score is based on a weighted average of the number of crimes per inhabitant, combined with the severity of the crime. A crime with a long prison sentence will impact the score more compared to a sentence of several months.'
+    }    
+    # Create DataTable columns
+    columns = [{'name': column_labels[col], 'id': col} for col in column_labels]
+
+    # Round the 'avg_income_per_recipient' column to 0 decimal places and convert the 'unemployment_rate' to a percentage rounded to 2 decimals
+    dataframe['avg_income_per_recipient'] = dataframe['avg_income_per_recipient'].round(0)
+    dataframe['unemployment_rate'] = (dataframe['unemployment_rate'] * 100).round(2)
+    dataframe = dataframe.replace('', 'Not known yet')
+
+    rows = dataframe.to_dict('records') # The DataTable function requires a dictionary-based dataframe
+    
+    return dash_table.DataTable(
+        id='data-table',
+        columns=columns,
+        data=rows,
+        style_table={'overflowX': 'auto'},
+        style_cell={'textAlign': 'left'},
+        page_size=max_rows,
+        sort_action='native',  
+        sort_mode='single', 
+        sort_by=[{'column_id': 'year', 'direction': 'desc'}], # sort the table by year in descending order
+        tooltip_header={col: f'Explanation: {column_hints[col]}' for col in column_hints}, # when you hover over a column, this is what you see
+        tooltip_data=[{
+        'crime_score': { # when you hover over the crime_score label, you see a small tooltip with what it means
+            'value': 'Compared to the rest of The Netherlands, this is doing at least **{} {}** than the worst municipality'.format(
+                '66%' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'high_crime' else '33%',
+                'better' if row['crime_score'] == 'low_crime' or row['crime_score'] == 'medium_crime' else 'worse'
+                
+            ),
+            'type': 'markdown'
+        }
+    } for row in rows],
+
+        style_header_conditional=[{
+        'if': {'column_id': col},
+        'textDecoration': 'underline',
+        'textDecorationStyle': 'dotted',
+    } for col in column_hints]
+
+    )
