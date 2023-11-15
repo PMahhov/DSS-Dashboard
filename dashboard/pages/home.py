@@ -42,7 +42,7 @@ layout = html.Div([
         dbc.CardBody(
             [
                 html.H5("More information", id="click_output"),
-                html.P("More statiscs are available for municipalities. Watch now!"),
+                html.P("More statistics are available for municipalities. Watch now!"),
                 html.Div([dbc.Button("View more", color="primary", disabled=True, id="redirect-button", style={"margin-right": "10px"}),
                 dbc.Button("Predict the future!", color="primary", disabled=True, id="redirect-button-2")]),
             ]
@@ -56,7 +56,7 @@ layout = html.Div([
                     "You see a crime score on your screen! This may be a bit vague, but the crime score is a normalised score of the crime occuring in specific municipality. \
                         The amount of crime is taken, and measured per capita.\
                         Then, weights are applied regarding the severity. The maximum penalty for a crime is taken as the weight. This way, a murder is weighted more heavily than theft.\
-                        Then, a label is assigned to the crime score. 33% of municipalities are low, 33% have medium and another 33% have high crime rate.", title="What are the scores I see on the screen?"
+                        Then, a label is assigned to the crime score. High, medium or low crime is an indicator of how much this municipality compares to the highest crime location in The Netherlands in 2022.", title="What are the scores I see on the screen?"
                 ),
                 dbc.AccordionItem(
                     "There have been many different mergers of municipalities over the last few years. As it would not give a correct overview with all the variety, only municipalities existing in 2023 have been included.", title="What are the spots on the map without a colour?"

@@ -244,7 +244,7 @@ def get_graph_over_time(active_cell, pathname, dataframe):
         else:
             column_name = 'population'
         
-        fig = px.line(dataframe, x="year", y=column_name, title=f'Predicted {column_name} year over year')
+        fig = px.line(dataframe, x="year", y=column_name, title=f'Predicted {column_name} over years')
         return dcc.Graph(figure=fig, id='graph-over-time')        
     else:
         pass

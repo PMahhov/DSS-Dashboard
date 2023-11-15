@@ -11,17 +11,7 @@ import plotly.express as px
 navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.NavLink("Visit Amsterdam!", href="/municipality/GM0363")),
-        dbc.NavItem(dbc.NavLink("Predict and ", href="/municipality/GM0363")),
-        dbc.DropdownMenu(
-            children=[
-                dbc.DropdownMenuItem("More pages", header=True),
-                dbc.DropdownMenuItem("Page 2", href="#"),
-                dbc.DropdownMenuItem("Page 3", href="#"),
-            ],
-            nav=True,
-            in_navbar=True,
-            label="More",
-        ),
+        dbc.NavItem(dbc.NavLink("Predict Amsterdam ", href="/predict/GM0363")),
     ],
     brand="Crimestat",
     brand_href="/",

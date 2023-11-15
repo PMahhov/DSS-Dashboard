@@ -284,12 +284,15 @@ def get_graph_over_time(active_cell, pathname):
     if active_cell:
         stat_code = pathname.split('/')[-1]
         column_name = active_cell['column_id']
-        data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
-        data['avg_income_per_recipient'] = data['avg_income_per_recipient'].round(0)
-        data['unemployment_rate'] = (data['unemployment_rate'] * 100).round(2)
+        if not column_name in ['year', 'crime_score']:
+            data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
+            data['avg_income_per_recipient'] = data['avg_income_per_recipient'].round(0)
+            data['unemployment_rate'] = (data['unemployment_rate'] * 100).round(2)
 
-        
-        fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} year over year')
-        return dcc.Graph(figure=fig, id='graph-over-time')
+            
+            fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} by year')
+            return dcc.Graph(figure=fig, id='graph-over-time')
+        else:  
+            return "Click a cell in the table the to see the progress of this variable over time"
     else:
         return "Click a cell in the table the to see the progress of this variable over time"
