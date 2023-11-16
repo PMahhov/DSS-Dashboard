@@ -60,7 +60,33 @@ def layout(stat_code=None):
     tab2_content = dbc.Card(
     dbc.CardBody(
         [
-            None
+            dcc.Location(id='url', refresh=False),
+            html.H1(f'View municipal statistics - {municipal_name_defined}'),
+            html.Div(f"Municipality code: {stat_code}"),
+            dcc.Dropdown(
+                id='year-dropdown-compare',
+                options=[
+                    {'label': str(year), 'value': year} for year in range(2013, 2022)
+                ],
+                value=2021,
+                style={'width': '50%'}
+            ),
+            html.Div([
+                html.Div([
+                    dcc.Graph(id='pie-chart-compare'),
+                ], style={'width': '48%', 'display': 'inline-block'}),
+                html.Div([
+                    dcc.Graph(id='crime-scatter-compare')
+                ], style={'width': '48%', 'display': 'inline-block'}),
+            ]),
+                html.Div([
+                    dcc.Loading(
+                        id="loading-table-compare",
+                        type="circle",
+                        children=[html.Div(id="data-table-compare", style={'paddingBottom': '50px'}),
+                                  dbc.Alert(id='tbl_out-compare', color='secondary')],
+                    )
+                ]),
         ],
     ),
     className="mt-3",
