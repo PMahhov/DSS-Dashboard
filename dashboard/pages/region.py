@@ -344,7 +344,10 @@ def get_graph_over_time(active_cell, pathname):
     else:
         return "Click a cell in the table the to see the progress of this variable over time"
     
-    #The following is everything for tab 2
+
+
+
+#The following is everything for tab 2
 @callback(
     [Output('pie-chart-compare', 'figure'),
      Output('crime-scatter-compare', 'figure')],
@@ -589,11 +592,12 @@ def get_graph_over_time_comparison(active_cells, pathname, municipality_compare_
         'unemployment_rate': 'Unemployment Rate (%)',
         'crime_score': 'Crime score',
     }
+    print('Compare:', active_cells)
 
     if active_cells:
         stat_code = pathname.split('/')[-1]
         column_name = active_cells['column_id']
-        if not column_name in ['year', 'crime_score']:
+        if not column_name in ['year', 'crime_score', 'Name']:
             municipal_name1 = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}' LIMIT 1", engine).iloc[0]['municipality_name']
             municipal_name2 = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{municipality_compare_id}' LIMIT 1", engine).iloc[0]['municipality_name']
 

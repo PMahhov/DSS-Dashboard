@@ -2,7 +2,7 @@ import dash
 from dash import dcc, callback, dash_table, html, page_registry
 from dash.dash_table import FormatTemplate
 import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.express as px
 from dash import html
 import pandas as pd
@@ -16,7 +16,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 
 engine = create_engine("postgresql://student:infomdss@db_dashboard:5432/dashboard")
-clean_demo_data = pd.read_sql_query("select municipality_id, population, household_size, population_density, degree_of_urbanity, \"distance_GP\", distance_supermarket, distance_daycare, distance_school, avg_income_per_recipient, year, unemployment_rate from demo_data WHERE year >= 2013 AND year <= 2022", engine)    
+clean_demo_data = pd.read_sql_query("select municipality_id, population, household_size, population_density, degree_of_urbanity, distancegp, distance_supermarket, distance_daycare, distance_school, avg_income_per_recipient, year, unemployment_rate from demo_data WHERE year >= 2013 AND year <= 2022", engine)    
 crime_score_df = pd.read_sql_query("select * from crime_score WHERE year >= 2013 AND year <= 2022", engine)    
 X_full_oversampled = pd.read_sql_query("select * from x_oversampled", engine)    
 y_full_oversampled = pd.read_sql_query("select * from y_oversampled ", engine)    
@@ -93,9 +93,12 @@ def get_all_default_predictions(GM_id, year):
 
 
 def predict_crime_class(GM_id, year, classifier = final_rf_classifier):
-  values_df = get_all_default_predictions(GM_id, year)
-  values_df.drop('year', axis=1, inplace=True)
-  return str(final_rf_classifier.predict(values_df)[0])
+    values_df = get_all_default_predictions(GM_id, year)
+    values_df.drop('year', axis=1, inplace=True)
+    return str(final_rf_classifier.predict(values_df)[0])
+
+def predict_crime_class_dfprovided(GM_id, year, values_df, classifier = final_rf_classifier):
+    return str(final_rf_classifier.predict(values_df)[0])
 
 def add_crime_class_predictions(GM_id, df):
     # Create a new column 'crime_class' to store the predictions
@@ -132,6 +135,49 @@ def layout(stat_code=None):
         return html.Div([
             dcc.Location(id='url', refresh=False),
             html.H1(f'Predict future municipal statistics - {municipal_name}'),
+            dcc.Dropdown(
+                id='year-dropdown',
+                options=[
+                    {'label': str(year), 'value': year} for year in range(2023, 2050)
+                ],
+                value=2021,
+                style={'width': '50%'}
+            ),
+            html.Div([
+               
+                    dbc.Label("Population"),
+                    dbc.Input(id='population', type='number', min=0),
+
+                    dbc.Label("Household Size"),
+                    dbc.Input(id='household-size', type='number', min=0),
+
+                    dbc.Label("Population Density"),
+                    dbc.Input(id='population-density', type='number', min=0, max=10),
+
+                    dbc.Label("Average Income per Recipient"),
+                    dbc.Input(id='avg-income-per-recipient', type='number', min=0),
+
+                    dbc.Label("Unemployment Rate"),
+                    dbc.Input(id='unemployment-rate', type='number', min=1, max=99),
+
+                    dbc.Label("Degree of Urbanity"),
+                    dbc.Input(id='degree_of_urbanity', type='number', min=0, max=5),
+
+                    dbc.Label("Distance to GP (km)"),
+                    dbc.Input(id='distancegp', type='number', min=0),
+
+                    dbc.Label("Distance to Daycare (km)"),
+                    dbc.Input(id='distance-daycare', type='number', min=0),
+
+                    dbc.Label("Distance to School (km)"),
+                    dbc.Input(id='distance-school', type='number', min=0),
+
+                    dbc.Label("Distance to Supermarket (km)"),
+                    dbc.Input(id='distance-supermarket', type='number', min=0),
+
+                dbc.Button("Calculate", id='calculate-btn', color="primary", className="mt-3"),
+                html.Div(id='output-prediction', className="mt-3")
+            ]),
             html.Div(f"Municipality code: {stat_code}"),
             html.Div([
                 dcc.Loading(
@@ -223,15 +269,74 @@ def generate_table(dataframe, max_rows=50):
 
     )
 
-@callback(Output('tbl_out-2', 'children'), [Input('data-table-2', 'active_cell'), Input('url', 'pathname'), Input('data-table-2', 'data')])
-def get_graph_over_time(active_cell, pathname, dataframe):
-    if dataframe is not None:
-        if active_cell:
-            column_name = active_cell['column_id']
-        else:
-            column_name = 'population'
-        
-        fig = px.line(dataframe, x="year", y=column_name, title=f'Predicted {column_name} over years')
-        return dcc.Graph(figure=fig, id='graph-over-time')        
-    else:
-        pass
+# Define callback to update input fields based on the selected year
+@callback(
+    [Output('population', 'value'),
+     Output('household-size', 'value'),
+     Output('population-density', 'value'),
+     Output('avg-income-per-recipient', 'value'),
+     Output('unemployment-rate', 'value'),
+     Output('degree_of_urbanity', 'value'),
+     Output('distancegp', 'value'),
+     Output('distance-daycare', 'value'),
+     Output('distance-school', 'value'),
+     Output('distance-supermarket', 'value')],
+    [Input('year-dropdown', 'value'), Input('url', 'pathname')]
+)
+def update_inputs(selected_year, url):
+    stat_code = url.split('/')[-1]
+    # Filter the DataFrame based on the selected year
+
+    selected_data = get_all_default_predictions(stat_code, selected_year)
+
+    # Return the values for the input fields
+    return (
+        selected_data['population'].iloc[0],
+        selected_data['household_size'].iloc[0],
+        selected_data['population_density'].iloc[0],
+        selected_data['avg_income_per_recipient'].iloc[0],
+        selected_data['unemployment_rate'].iloc[0],
+        selected_data['degree_of_urbanity'].iloc[0],
+        selected_data['distancegp'].iloc[0],
+        selected_data['distance_daycare'].iloc[0],
+        selected_data['distance_school'].iloc[0],
+        selected_data['distance_supermarket'].iloc[0],
+    )
+
+
+# Define callback to update prediction based on user input
+@callback(
+    Output('output-prediction', 'children'),
+    [Input('calculate-btn', 'n_clicks')], Input('year-dropdown', 'value'), Input('url', 'pathname'),
+    [State('population', 'value'),
+     State('household-size', 'value'),
+     State('population-density', 'value'),
+     State('avg-income-per-recipient', 'value'),
+     State('unemployment-rate', 'value'),
+     State('degree_of_urbanity', 'value'),
+     State('distancegp', 'value'),
+     State('distance-daycare', 'value'),
+     State('distance-school', 'value'),
+     State('distance-supermarket', 'value')]
+)
+def update_prediction(n_clicks, year, url, population, household_size, population_density, avg_income_per_recipient,
+                      unemployment_rate, degree_of_urbanity, distancegp, distance_daycare, distance_school,
+                      distance_supermarket):
+
+    
+    # Perform your prediction logic here based on the input values
+    stat_code = url.split('/')[-1]
+    user_data = pd.DataFrame({
+        'population': [(population)],
+        'household_size': [(household_size)],
+        'population_density': [(population_density)],
+        'degree_of_urbanity': [(degree_of_urbanity)],
+        'distancegp': [(distancegp)],
+        'distance_supermarket': [(distance_supermarket)],
+        'distance_daycare': [(distance_daycare)],
+        'distance_school': [(distance_school)],
+        'avg_income_per_recipient': [(avg_income_per_recipient)],
+        'unemployment_rate': [(unemployment_rate)],
+    })
+
+    return "The values provided result in: "+predict_crime_class_dfprovided(stat_code, year, user_data)

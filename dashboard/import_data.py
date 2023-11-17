@@ -77,7 +77,7 @@ def clean_demo_data_func(demo_df, current_municipalities):
         'a_opl_lg': 'low_educated_population',
         'a_opl_md': 'medium_educated_population',
         'a_opl_hg': 'high_educated_population',
-        'g_afs_hp': 'distance_GP',
+        'g_afs_hp': 'distancegp',
         'g_afs_gs': 'distance_supermarket',
         'g_afs_kv': 'distance_daycare',
         'g_afs_sc': 'distance_school',
@@ -89,7 +89,7 @@ def clean_demo_data_func(demo_df, current_municipalities):
 
 
   #convert commas to floating points in respective columns
-  columns_to_convert = ['household_size', 'distance_GP', 'distance_supermarket', 'distance_daycare',
+  columns_to_convert = ['household_size', 'distancegp', 'distance_supermarket', 'distance_daycare',
                         'distance_school', 'avg_income_per_recipient']
 
 
