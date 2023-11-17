@@ -73,19 +73,6 @@ def get_demographic_value(GM_id, stat, year):
 
   return value
 
-
-print("unemployment rate in GM0014:")
-print("2010:",get_demographic_value("GM0014","unemployment_rate",2010))
-print("2015:",get_demographic_value("GM0014","unemployment_rate",2015))
-print("2020:",get_demographic_value("GM0014","unemployment_rate",2020))
-print("2025:",get_demographic_value("GM0014","unemployment_rate",2025))
-print("2030:",get_demographic_value("GM0014","unemployment_rate",2030))
-print("2035",get_demographic_value("GM0014","unemployment_rate",2035))
-print("2040:",get_demographic_value("GM0014","unemployment_rate",2040))
-print("2045:",get_demographic_value("GM0014","unemployment_rate",2045))
-print("2045:",get_demographic_value("GM0014","unemployment_rate",2050), '\n')
-
-
 def get_all_default_predictions(GM_id, year):
   values = []
   for feature in feature_names:
