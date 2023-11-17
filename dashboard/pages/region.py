@@ -594,6 +594,10 @@ def get_graph_over_time_comparison(active_cells, pathname, municipality_compare_
         stat_code = pathname.split('/')[-1]
         column_name = active_cells['column_id']
         if not column_name in ['year', 'crime_score']:
+            municipal_name1 = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{stat_code}' LIMIT 1", engine).iloc[0]['municipality_name']
+            municipal_name2 = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{municipality_compare_id}' LIMIT 1", engine).iloc[0]['municipality_name']
+
+
             # Fetch data for the first municipality
             data_municipality_1 = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
             data_municipality_1['avg_income_per_recipient'] = data_municipality_1['avg_income_per_recipient'].round(0)
@@ -605,10 +609,10 @@ def get_graph_over_time_comparison(active_cells, pathname, municipality_compare_
             data_municipality_2['unemployment_rate'] = (data_municipality_2['unemployment_rate'] * 100).round(2)
 
             # Concatenate the two dataframes
-            data_combined = pd.concat([data_municipality_1, data_municipality_2], keys=['Municipality 1', 'Municipality 2'])
+            data_combined = pd.concat([data_municipality_1, data_municipality_2], keys=[municipal_name1, municipal_name2])
 
             # Create the line chart
-            fig = px.line(data_combined, x="year", y=active_cells['column_id'], color=data_combined.index.get_level_values(0), title=f'{column_name} by year')
+            fig = px.line(data_combined, x="year", y=active_cells['column_id'], color=data_combined.index.get_level_values(0), title=f'{column_labels[column_name]} by year')
             return dcc.Graph(figure=fig, id='graph-over-time-comparison')
         else:  
             return "Click a cell in the table the to see the progress of this variable over time (3)"
