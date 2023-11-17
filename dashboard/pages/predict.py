@@ -152,7 +152,7 @@ def layout(stat_code=None):
                     dbc.Input(id='household-size', type='number', min=0),
 
                     dbc.Label("Population Density"),
-                    dbc.Input(id='population-density', type='number', min=0, max=10),
+                    dbc.Input(id='population-density', type='number', min=0, max=10000),
 
                     dbc.Label("Average Income per Recipient"),
                     dbc.Input(id='avg-income-per-recipient', type='number', min=0),
@@ -160,7 +160,7 @@ def layout(stat_code=None):
                     dbc.Label("Unemployment Rate"),
                     dbc.Input(id='unemployment-rate', type='number', min=1, max=99),
 
-                    dbc.Label("Degree of Urbanity"),
+                    dbc.Label("Degree of Urbanity (range 1-5)"),
                     dbc.Input(id='degree_of_urbanity', type='number', min=0, max=5),
 
                     dbc.Label("Distance to GP (km)"),
@@ -322,21 +322,26 @@ def update_inputs(selected_year, url):
 def update_prediction(n_clicks, year, url, population, household_size, population_density, avg_income_per_recipient,
                       unemployment_rate, degree_of_urbanity, distancegp, distance_daycare, distance_school,
                       distance_supermarket):
-
     
+    # Perform your input validation here
+    if any(value is None or pd.isna(value) for value in [population, household_size, population_density, avg_income_per_recipient,
+                      unemployment_rate, degree_of_urbanity, distancegp, distance_daycare, distance_school,
+                      distance_supermarket]):
+        return "Please provide valid values for all fields."
+
     # Perform your prediction logic here based on the input values
     stat_code = url.split('/')[-1]
     user_data = pd.DataFrame({
-        'population': [(population)],
-        'household_size': [(household_size)],
-        'population_density': [(population_density)],
-        'degree_of_urbanity': [(degree_of_urbanity)],
-        'distancegp': [(distancegp)],
-        'distance_supermarket': [(distance_supermarket)],
-        'distance_daycare': [(distance_daycare)],
-        'distance_school': [(distance_school)],
-        'avg_income_per_recipient': [(avg_income_per_recipient)],
-        'unemployment_rate': [(unemployment_rate)],
+        'population': [population],
+        'household_size': [household_size],
+        'population_density': [population_density],
+        'degree_of_urbanity': [degree_of_urbanity],
+        'distancegp': [distancegp],
+        'distance_supermarket': [distance_supermarket],
+        'distance_daycare': [distance_daycare],
+        'distance_school': [distance_school],
+        'avg_income_per_recipient': [avg_income_per_recipient],
+        'unemployment_rate': [unemployment_rate],
     })
 
     return "The values provided result in: "+predict_crime_class_dfprovided(stat_code, year, user_data)
