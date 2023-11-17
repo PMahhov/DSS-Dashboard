@@ -157,7 +157,7 @@ def layout(stat_code=None):
                     dbc.Label("Average Income per Recipient"),
                     dbc.Input(id='avg-income-per-recipient', type='number', min=0),
 
-                    dbc.Label("Unemployment Rate in decimals (0-1)"),
+                    dbc.Label("Unemployment Rate in decimals (0-1za)"),
                     dbc.Input(id='unemployment-rate', type='number', min=0, max=1),
 
                     dbc.Label("Degree of Urbanity (range 1-5)"),
@@ -324,7 +324,6 @@ def update_prediction(n_clicks, year, url, population, household_size, populatio
                       distance_supermarket):
     
     if n_clicks != None and n_clicks > 0:
-        # Perform your input validation here
         fields = {
             'population': population,
             'household_size': household_size,
