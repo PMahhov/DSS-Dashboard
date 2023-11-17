@@ -157,7 +157,7 @@ def layout(stat_code=None):
                     dbc.Label("Average Income per Recipient"),
                     dbc.Input(id='avg-income-per-recipient', type='number', min=0),
 
-                    dbc.Label("Unemployment Rate in decimals (0-1za)"),
+                    dbc.Label("Unemployment Rate in decimals (0-1)"),
                     dbc.Input(id='unemployment-rate', type='number', min=0, max=1),
 
                     dbc.Label("Degree of Urbanity (range 1-5)"),
