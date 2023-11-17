@@ -157,8 +157,8 @@ def layout(stat_code=None):
                     dbc.Label("Average Income per Recipient"),
                     dbc.Input(id='avg-income-per-recipient', type='number', min=0),
 
-                    dbc.Label("Unemployment Rate"),
-                    dbc.Input(id='unemployment-rate', type='number', min=1, max=99),
+                    dbc.Label("Unemployment Rate in decimals (0-1)"),
+                    dbc.Input(id='unemployment-rate', type='number', min=0, max=1),
 
                     dbc.Label("Degree of Urbanity (range 1-5)"),
                     dbc.Input(id='degree_of_urbanity', type='number', min=0, max=5),
@@ -323,25 +323,40 @@ def update_prediction(n_clicks, year, url, population, household_size, populatio
                       unemployment_rate, degree_of_urbanity, distancegp, distance_daycare, distance_school,
                       distance_supermarket):
     
-    # Perform your input validation here
-    if any(value is None or pd.isna(value) for value in [population, household_size, population_density, avg_income_per_recipient,
-                      unemployment_rate, degree_of_urbanity, distancegp, distance_daycare, distance_school,
-                      distance_supermarket]):
-        return "Please provide valid values for all fields."
+    if n_clicks != None and n_clicks > 0:
+        # Perform your input validation here
+        fields = {
+            'population': population,
+            'household_size': household_size,
+            'population_density': population_density,
+            'avg_income_per_recipient': avg_income_per_recipient,
+            'unemployment_rate': unemployment_rate,
+            'degree_of_urbanity': degree_of_urbanity,
+            'distancegp': distancegp,
+            'distance_daycare': distance_daycare,
+            'distance_school': distance_school,
+            'distance_supermarket': distance_supermarket
+        }
 
-    # Perform your prediction logic here based on the input values
-    stat_code = url.split('/')[-1]
-    user_data = pd.DataFrame({
-        'population': [population],
-        'household_size': [household_size],
-        'population_density': [population_density],
-        'degree_of_urbanity': [degree_of_urbanity],
-        'distancegp': [distancegp],
-        'distance_supermarket': [distance_supermarket],
-        'distance_daycare': [distance_daycare],
-        'distance_school': [distance_school],
-        'avg_income_per_recipient': [avg_income_per_recipient],
-        'unemployment_rate': [unemployment_rate],
-    })
+        invalid_fields = [field for field, value in fields.items() if value is None or pd.isna(value)]
 
-    return "The values provided result in: "+predict_crime_class_dfprovided(stat_code, year, user_data)
+        if invalid_fields:
+            return f"Please provide valid values for the following fields: {', '.join(invalid_fields)}"
+        else:
+
+            # Perform your prediction logic here based on the input values
+            stat_code = url.split('/')[-1]
+            user_data = pd.DataFrame({
+                'population': [population],
+                'household_size': [household_size],
+                'population_density': [population_density],
+                'degree_of_urbanity': [degree_of_urbanity],
+                'distancegp': [distancegp],
+                'distance_supermarket': [distance_supermarket],
+                'distance_daycare': [distance_daycare],
+                'distance_school': [distance_school],
+                'avg_income_per_recipient': [avg_income_per_recipient],
+                'unemployment_rate': [unemployment_rate],
+            })
+
+            return "The values provided result in: "+predict_crime_class_dfprovided(stat_code, year, user_data)
