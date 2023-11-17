@@ -252,26 +252,6 @@ def generate_crime_scatter(statcode, selected_year:int):
                     title=f"Reported crime and maximum jail time in {selected_year}")
     return fig
 
-@callback(Output('tbl_out', 'children'), [Input('data-table', 'active_cell'), Input('url', 'pathname')])
-def get_graph_over_time(active_cell, pathname):
-    print(active_cell)
-    # When you click on a table cell, you can see more statistics
-    if active_cell:
-        stat_code = pathname.split('/')[-1]
-        column_name = active_cell['column_id']
-        if not column_name in ['year', 'crime_score']:
-            data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
-            data['avg_income_per_recipient'] = data['avg_income_per_recipient'].round(0)
-            data['unemployment_rate'] = (data['unemployment_rate'] * 100).round(2)
-
-            
-            fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} by year')
-            return dcc.Graph(figure=fig, id='graph-over-time')
-        else:  
-            return "Click a cell in the table the to see the progress of this variable over time (3)"
-    else:
-        return "Click a cell in the table the to see the progress of this variable over time"
-    
 @callback(
     [Output('data-table', 'children')],
     [Input('url', 'pathname')]
@@ -344,7 +324,27 @@ def generate_table(dataframe, max_rows=15):
 
     )
 
-#The following is everything for tab 2
+@callback(Output('tbl_out', 'children'), [Input('data-table', 'active_cell'), Input('url', 'pathname')])
+def get_graph_over_time(active_cell, pathname):
+    print(active_cell)
+    # When you click on a table cell, you can see more statistics
+    if active_cell:
+        stat_code = pathname.split('/')[-1]
+        column_name = active_cell['column_id']
+        if not column_name in ['year', 'crime_score']:
+            data = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{stat_code}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
+            data['avg_income_per_recipient'] = data['avg_income_per_recipient'].round(0)
+            data['unemployment_rate'] = (data['unemployment_rate'] * 100).round(2)
+
+            
+            fig = px.line(data, x="year", y=active_cell['column_id'], title=f'{column_name} by year')
+            return dcc.Graph(figure=fig, id='graph-over-time')
+        else:  
+            return "Click a cell in the table the to see the progress of this variable over time (3)"
+    else:
+        return "Click a cell in the table the to see the progress of this variable over time"
+    
+    #The following is everything for tab 2
 @callback(
     [Output('pie-chart-compare', 'figure'),
      Output('crime-scatter-compare', 'figure')],
@@ -495,8 +495,8 @@ def update_comparison_datatable(pathname, compare_municipalityid, year):
     municipal_name2 = pd.read_sql_query(f"SELECT municipality_name FROM municipality_names WHERE municipality_id = '{compare_municipalityid}' LIMIT 1", engine).iloc[0]['municipality_name']
 
 
-    table = generate_comparison_table(data_municipality1, data_municipality2, year, municipal_name1, municipal_name2)
-    return [table]
+    table_cmpr = generate_comparison_table(data_municipality1, data_municipality2, year, municipal_name1, municipal_name2)
+    return [table_cmpr]
 
 
 def generate_comparison_table(dataframe1, dataframe2, selected_year, municipal_name1, municipal_name2):
@@ -548,7 +548,7 @@ def generate_comparison_table(dataframe1, dataframe2, selected_year, municipal_n
     rows = rows1 + rows2
 
     return dash_table.DataTable(
-        id='data-table',
+        id='data-table-compare',
         columns=columns,
         data=rows,
         style_table={'overflowX': 'auto'},
@@ -579,6 +579,17 @@ def generate_comparison_table(dataframe1, dataframe2, selected_year, municipal_n
 @callback(Output('tbl_out-compare', 'children'), [Input('data-table-compare', 'active_cell'), Input('url', 'pathname'), Input('municipality-dropdown', 'value')])
 def get_graph_over_time_comparison(active_cells, pathname, municipality_compare_id):
     # When you click on a table cell, you can see more statistics
+    column_labels = {
+        'Name': 'Name',
+        'year': 'Year',
+        'population': 'Population',
+        'household_size': 'Household Size',
+        'population_density': 'Population Density',
+        'avg_income_per_recipient': 'Average Income per Recipient',
+        'unemployment_rate': 'Unemployment Rate (%)',
+        'crime_score': 'Crime score',
+    }
+
     if active_cells:
         stat_code = pathname.split('/')[-1]
         column_name = active_cells['column_id']
@@ -589,7 +600,7 @@ def get_graph_over_time_comparison(active_cells, pathname, municipality_compare_
             data_municipality_1['unemployment_rate'] = (data_municipality_1['unemployment_rate'] * 100).round(2)
 
             # Fetch data for the second municipality (assuming the ID is municipality_compare_id)
-            data_municipality_2 = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{municipality_compare_id}' AND demo_data.municipality_compare_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
+            data_municipality_2 = pd.read_sql_query(f"SELECT demo_data.year AS year, demo_data.population AS population, household_size, low_educated_population, medium_educated_population, high_educated_population, population_density, avg_income_per_recipient, unemployment_rate, ROUND(crime_score.\"XP\"::numeric*10,2) AS crime_score FROM demo_data, crime_score WHERE demo_data.municipality_id = '{municipality_compare_id}' AND demo_data.municipality_id=crime_score.municipality_id AND demo_data.year=crime_score.year", engine)    
             data_municipality_2['avg_income_per_recipient'] = data_municipality_2['avg_income_per_recipient'].round(0)
             data_municipality_2['unemployment_rate'] = (data_municipality_2['unemployment_rate'] * 100).round(2)
 
@@ -598,7 +609,7 @@ def get_graph_over_time_comparison(active_cells, pathname, municipality_compare_
 
             # Create the line chart
             fig = px.line(data_combined, x="year", y=active_cells['column_id'], color=data_combined.index.get_level_values(0), title=f'{column_name} by year')
-            return dcc.Graph(figure=fig, id='graph-over-time')
+            return dcc.Graph(figure=fig, id='graph-over-time-comparison')
         else:  
             return "Click a cell in the table the to see the progress of this variable over time (3)"
     else:
